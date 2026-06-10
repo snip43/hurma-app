@@ -1967,9 +1967,15 @@ function bindEvents() {
 }
 
 let activeMapEventTitle = null;
+let serviceChoiceMade = false;
 
 function renderCatalog(user) {
   const selectedService = SERVICE_OPTIONS.includes(filters.category) ? filters.category : SERVICE_OPTIONS[0];
+
+  if (!serviceChoiceMade && !activeMapEventTitle) {
+    return renderServiceTabs(null);
+  }
+
   filters.category = selectedService;
 
   if (selectedService === SERVICE_OPTIONS[2]) {
@@ -2705,6 +2711,42 @@ function bindEvents() {
     });
   });
 }
+
+const bindEventsBeforeServiceChoiceGate = bindEvents;
+bindEvents = function bindEventsWithServiceChoiceGate() {
+  bindEventsBeforeServiceChoiceGate();
+
+  document.querySelectorAll("[data-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.dataset.view === "services") {
+        serviceChoiceMade = false;
+        activeMapEventTitle = null;
+        app();
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-service]").forEach((button) => {
+    button.addEventListener("click", () => {
+      serviceChoiceMade = true;
+      app();
+    });
+  });
+};
+
+const continueAsGuestBeforeServiceChoiceGate = continueAsGuest;
+continueAsGuest = function continueAsGuestWithServiceChoiceGate() {
+  serviceChoiceMade = false;
+  activeMapEventTitle = null;
+  continueAsGuestBeforeServiceChoiceGate();
+};
+
+const handleAuthBeforeServiceChoiceGate = handleAuth;
+handleAuth = function handleAuthWithServiceChoiceGate(event) {
+  serviceChoiceMade = false;
+  activeMapEventTitle = null;
+  handleAuthBeforeServiceChoiceGate(event);
+};
 
 function renderBootError(error) {
   console.error("Hurma render error:", error);
