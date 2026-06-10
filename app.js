@@ -2748,6 +2748,123 @@ handleAuth = function handleAuthWithServiceChoiceGate(event) {
   handleAuthBeforeServiceChoiceGate(event);
 };
 
+let authEntryMode = "choice";
+let subscriptionModalOpen = false;
+
+function hasActiveSubscription(user) {
+  return Boolean(user && !user.isGuest && user.subscriptionActive === true);
+}
+
+function renderSubscriptionModal() {
+  if (!subscriptionModalOpen) return "";
+
+  return `
+    <div class="modal-backdrop">
+      <section class="subscription-modal" role="dialog" aria-modal="true" aria-labelledby="subscription-title">
+        <span class="tag">Подписка ХурМа</span>
+        <h2 id="subscription-title">Оформите подписку</h2>
+        <p>Гостевой режим позволяет смотреть сервисы и афишу. Чтобы написать исполнителю или оставить заявку, нужна регистрация и активная подписка.</p>
+        <div class="quick-actions">
+          <button class="primary" type="button" data-action="subscribe-register">Зарегистрироваться</button>
+          <button class="secondary" type="button" data-action="close-subscription">Позже</button>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function openSubscriptionModal() {
+  subscriptionModalOpen = true;
+  app();
+}
+
+const renderAuthBeforeSubscriptionGate = renderAuth;
+renderAuth = function renderAuthWithEntryChoice() {
+  if (authEntryMode !== "choice") {
+    return renderAuthBeforeSubscriptionGate();
+  }
+
+  return `
+    <section class="auth-layout">
+      <div class="intro">
+        <div>
+          <h1>ХурМа для солнечной Хургады</h1>
+          <p>Выберите сервис, найдите исполнителя, посмотрите афишу и начните общение после регистрации.</p>
+        </div>
+        <div class="intro-stats">
+          <div class="stat"><strong>3 сервиса</strong><span>трансфер, клининг и афиша рядом</span></div>
+          <div class="stat"><strong>чат</strong><span>диалог с исполнителем после подписки</span></div>
+          <div class="stat"><strong>Хургада</strong><span>локальные услуги для жителей и гостей</span></div>
+        </div>
+      </div>
+      <div class="panel auth-panel auth-choice-panel">
+        <h2 class="section-title">Войти в ХурМа</h2>
+        <p class="section-note">Зарегистрируйтесь для переписки и заявок или продолжите гостем для просмотра сервисов.</p>
+        <div class="auth-choice-actions">
+          <button class="primary" type="button" data-action="start-register">Регистрация</button>
+          <button class="secondary" type="button" data-action="guest">Продолжить без регистрации</button>
+        </div>
+      </div>
+    </section>
+  `;
+};
+
+const appBeforeSubscriptionGate = app;
+app = function appWithSubscriptionGate() {
+  appBeforeSubscriptionGate();
+  document.querySelector("#app").insertAdjacentHTML("beforeend", renderSubscriptionModal());
+  document.querySelector("[data-action='close-subscription']")?.addEventListener("click", () => {
+    subscriptionModalOpen = false;
+    app();
+  });
+  document.querySelector("[data-action='subscribe-register']")?.addEventListener("click", () => {
+    subscriptionModalOpen = false;
+    authEntryMode = "form";
+    authMode = "register";
+    state.sessionUserId = null;
+    saveState();
+    app();
+  });
+};
+
+const bindEventsBeforeSubscriptionGate = bindEvents;
+bindEvents = function bindEventsWithSubscriptionGate() {
+  bindEventsBeforeSubscriptionGate();
+
+  document.querySelector("[data-action='start-register']")?.addEventListener("click", () => {
+    authEntryMode = "form";
+    authMode = "register";
+    app();
+  });
+
+  document.querySelectorAll("[data-chat-with], [data-event-request]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      if (hasActiveSubscription(currentUser())) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      openSubscriptionModal();
+    }, true);
+  });
+};
+
+const continueAsGuestBeforeSubscriptionGate = continueAsGuest;
+continueAsGuest = function continueAsGuestWithSubscriptionGate() {
+  authEntryMode = "choice";
+  subscriptionModalOpen = false;
+  continueAsGuestBeforeSubscriptionGate();
+};
+
+const handleAuthBeforeSubscriptionGate = handleAuth;
+handleAuth = function handleAuthWithSubscriptionGate(event) {
+  handleAuthBeforeSubscriptionGate(event);
+  const user = currentUser();
+  if (user && !user.isGuest) {
+    user.subscriptionActive = true;
+    authEntryMode = "choice";
+    saveState();
+  }
+};
+
 function renderBootError(error) {
   console.error("Hurma render error:", error);
   document.querySelector("#app").innerHTML = `
@@ -2779,4 +2896,4 @@ setTimeout(() => {
   } catch (error) {
     renderBootError(error);
   }
-}, 2600);
+}, 4200);
