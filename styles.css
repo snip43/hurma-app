@@ -331,6 +331,10 @@ button {
 
 .brand-title {
   margin: 0;
+  color: transparent;
+  background: linear-gradient(110deg, #f1c96e 0%, #f5df9a 30%, #32b7aa 62%, #087286 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
   font-family: "Anton", Impact, "Arial Narrow", sans-serif;
   font-size: 24px;
   font-weight: 400;
@@ -591,7 +595,7 @@ button {
   content: attr(data-hint);
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 10px);
+  top: calc(100% + 10px);
   z-index: 4;
   width: min(280px, 78vw);
   padding: 10px 12px;
@@ -606,7 +610,7 @@ button {
   opacity: 0;
   pointer-events: none;
   text-align: center;
-  transform: translate(-50%, 8px);
+  transform: translate(-50%, -8px);
   transition: opacity 0.22s ease, transform 0.22s ease;
 }
 

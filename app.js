@@ -1,6 +1,6 @@
 const STORAGE_KEY = "hurma-marketplace-state-v1";
 const memoryStorage = {};
-const HURMA_AREAS = ["Все районы", "Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar"];
+const HURMA_AREAS = ["Все районы", "Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar", "Эль-Ахья"];
 const HURMA_SPORTS = ["Все виды спорта", "Футбол", "Йога", "Дайвинг", "Бег", "Падел"];
 const HURMA_EVENT_CARDS = [
   {
@@ -2891,7 +2891,7 @@ handleAuth = function handleAuthWithSubscriptionGate(event) {
 };
 
 const LOCATION_CITIES = ["Хургада"];
-const LOCATION_AREAS = ["Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar"];
+const LOCATION_AREAS = ["Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar", "Эль-Ахья"];
 
 function selectedLocation() {
   return state.location || { city: "Хургада", area: "Marina" };
@@ -2997,7 +2997,7 @@ app = function appWithLocationGate() {
   });
 };
 
-const SEARCH_AREAS = ["Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar"];
+const SEARCH_AREAS = ["Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar", "Эль-Ахья"];
 
 function renderSearchAreaField(selectedArea = "Marina") {
   return `
@@ -3011,7 +3011,7 @@ function renderSearchAreaField(selectedArea = "Marina") {
 }
 
 const CITY_AREAS_FORM = {
-  "Хургада": ["Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar", "Эль Ахья"],
+  "Хургада": ["Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar", "Эль-Ахья"],
   "Шарм-эль-Шейх": ["Naama Bay", "Hadaba", "Sharks Bay", "Nabq Bay", "Old Market", "SOHO Square"],
 };
 
@@ -3172,10 +3172,15 @@ function normalizeProfileCity(city) {
   return CITY_AREAS_FORM[city] ? city : "Хургада";
 }
 
+function normalizeAreaName(area) {
+  return area === "Эль Ахья" ? "Эль-Ахья" : area;
+}
+
 function normalizeProfileArea(city, area) {
   const normalizedCity = normalizeProfileCity(city);
   const areas = CITY_AREAS_FORM[normalizedCity] || CITY_AREAS_FORM["Хургада"];
-  return areas.includes(area) ? area : areas[0];
+  const normalizedArea = normalizeAreaName(area);
+  return areas.includes(normalizedArea) ? normalizedArea : areas[0];
 }
 
 function renderProfileLocationFields(user) {
