@@ -192,7 +192,7 @@ const seedState = {
       password: "123456",
       city: "Санкт-Петербург",
       category: "IT",
-      title: "Разработчик сайтов и ботов",
+      title: "Разработчик приложений и ботов",
       price: "от 4000 ₽",
       experience: "6 лет",
       rating: 4.8,
@@ -270,7 +270,7 @@ const seedState = {
       id: "m-1",
       from: "exec-2",
       to: "client-demo",
-      text: "Здравствуйте! Могу оценить задачу, если пришлете пару примеров сайтов.",
+      text: "Здравствуйте! Могу оценить задачу, если пришлете пару деталей.",
       createdAt: Date.now() - 1000 * 60 * 38,
     },
   ],
@@ -536,7 +536,7 @@ function renderCatalog(user) {
 
   return `
     <div class="panel searchbar">
-      <input data-filter="q" value="${escapeHtml(filters.q)}" placeholder="Поиск: ремонт, сайт, репетитор..." />
+      <input data-filter="q" value="${escapeHtml(filters.q)}" placeholder="Поиск: сервис, задача, исполнитель..." />
       <select data-filter="category">${categories().map((cat) => `<option ${filters.category === cat ? "selected" : ""}>${escapeHtml(cat)}</option>`).join("")}</select>
       <select data-filter="city">${cities().map((city) => `<option ${filters.city === city ? "selected" : ""}>${escapeHtml(city)}</option>`).join("")}</select>
     </div>
@@ -1210,6 +1210,19 @@ function renderCatalog(user) {
 }
 
 function renderServiceTabs(selectedService) {
+  if (selectedService) {
+    return `
+      <div class="service-tabs service-tabs-compact">
+        <button class="active" data-service="${selectedService}">
+          ${selectedService}
+        </button>
+        <button class="service-tabs-reset" type="button" data-action="show-all-services">
+          Все сервисы
+        </button>
+      </div>
+    `;
+  }
+
   return `
     <div class="service-tabs">
       ${SERVICE_OPTIONS.map((service) => `
@@ -2732,6 +2745,13 @@ bindEvents = function bindEventsWithServiceChoiceGate() {
       app();
     });
   });
+
+  document.querySelector("[data-action='show-all-services']")?.addEventListener("click", () => {
+    serviceChoiceMade = false;
+    activeMapEventTitle = null;
+    filters.q = "";
+    app();
+  });
 };
 
 const continueAsGuestBeforeServiceChoiceGate = continueAsGuest;
@@ -2798,11 +2818,10 @@ renderAuth = function renderAuthWithEntryChoice() {
         </div>
       </div>
       <div class="panel auth-panel auth-choice-panel">
-        <h2 class="section-title">Войти в ХурМа</h2>
-        <p class="section-note">Зарегистрируйтесь для переписки и заявок или продолжите гостем для просмотра сервисов.</p>
         <div class="auth-choice-actions">
-          <button class="primary" type="button" data-action="start-register">Регистрация</button>
-          <button class="secondary" type="button" data-action="guest">Продолжить без регистрации</button>
+          <button class="primary" type="button" data-action="start-login" data-hint="Откроется форма входа для зарегистрированных пользователей.">Вход</button>
+          <button class="primary" type="button" data-action="start-register" data-hint="Создайте аккаунт, выберите роль и район поиска.">Регистрация</button>
+          <button class="secondary" type="button" data-action="guest" data-hint="Можно посмотреть сервисы и афишу без аккаунта. Для заявок понадобится подписка.">Продолжить без регистрации</button>
         </div>
       </div>
     </section>
@@ -2837,6 +2856,12 @@ bindEvents = function bindEventsWithSubscriptionGate() {
     app();
   });
 
+  document.querySelector("[data-action='start-login']")?.addEventListener("click", () => {
+    authEntryMode = "form";
+    authMode = "login";
+    app();
+  });
+
   document.querySelectorAll("[data-chat-with], [data-event-request]").forEach((button) => {
     button.addEventListener("click", (event) => {
       if (hasActiveSubscription(currentUser())) return;
@@ -2865,6 +2890,372 @@ handleAuth = function handleAuthWithSubscriptionGate(event) {
   }
 };
 
+const LOCATION_CITIES = ["Хургада"];
+const LOCATION_AREAS = ["Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar"];
+
+function selectedLocation() {
+  return state.location || { city: "Хургада", area: "Marina" };
+}
+
+function renderLocationScreen() {
+  const location = selectedLocation();
+  return `
+    <div class="app-shell">
+      <main class="main location-main">
+        <section class="location-screen">
+          <div class="location-copy">
+            <div class="brand location-brand">
+              <div class="brand-mark">Х</div>
+              <div>
+                <h1 class="brand-title">ХурМа</h1>
+                <p class="brand-subtitle">сервисы рядом с вами</p>
+              </div>
+            </div>
+            <div>
+              <h2>Где ищем услуги?</h2>
+              <p>Выберите город и район, чтобы ХурМа сразу показывала актуальные сервисы, афишу и исполнителей поблизости.</p>
+            </div>
+          </div>
+          <form class="panel location-panel" data-form="location">
+            <span class="tag">Локация</span>
+            <h2 class="section-title">Выберите место</h2>
+            <label class="field">
+              <span>Город</span>
+              <select name="city" required>
+                ${LOCATION_CITIES.map((city) => `<option ${location.city === city ? "selected" : ""}>${city}</option>`).join("")}
+              </select>
+            </label>
+            <label class="field">
+              <span>Район</span>
+              <select name="area" required>
+                ${LOCATION_AREAS.map((area) => `<option ${location.area === area ? "selected" : ""}>${area}</option>`).join("")}
+              </select>
+            </label>
+            <button class="primary" type="submit">Продолжить</button>
+          </form>
+        </section>
+      </main>
+    </div>
+  `;
+}
+
+function handleLocation(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  state.location = {
+    city: String(form.get("city") || "Хургада"),
+    area: String(form.get("area") || "Marina"),
+  };
+  state.locationConfirmed = true;
+  filters.city = state.location.city;
+  filters.area = state.location.area;
+  saveState();
+  app();
+}
+
+const renderTopbarBeforeLocation = renderTopbar;
+renderTopbar = function renderTopbarWithLocation(user) {
+  const location = selectedLocation();
+  return `
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">Х</div>
+        <div>
+          <h1 class="brand-title">ХурМа</h1>
+          <p class="brand-subtitle">сервисы для жизни в Хургаде</p>
+        </div>
+      </div>
+      <div class="user-tools">
+        <button class="location-pill" type="button" data-action="change-location">
+          <span>${escapeHtml(location.city)}</span>
+          <strong>${escapeHtml(location.area)}</strong>
+        </button>
+        ${
+          user
+            ? `<span class="role-pill">${user.role === "executor" ? "Исполнитель" : user.isGuest ? "Гость" : "Клиент"} · ${escapeHtml(user.name)}</span>
+               <button class="secondary" data-action="logout">Выйти</button>`
+            : `<span class="role-pill">Демо: client@hurma.local / 123456</span>`
+        }
+      </div>
+    </header>
+  `;
+};
+
+const appBeforeLocationGate = app;
+app = function appWithLocationGate() {
+  if (!state.locationConfirmed) {
+    document.querySelector("#app").innerHTML = renderLocationScreen();
+    document.querySelector("[data-form='location']")?.addEventListener("submit", handleLocation);
+    return;
+  }
+
+  appBeforeLocationGate();
+  document.querySelector("[data-action='change-location']")?.addEventListener("click", () => {
+    state.locationConfirmed = false;
+    saveState();
+    app();
+  });
+};
+
+const SEARCH_AREAS = ["Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar"];
+
+function renderSearchAreaField(selectedArea = "Marina") {
+  return `
+    <label class="field">
+      <span>Район поиска</span>
+      <select name="searchArea" required>
+        ${SEARCH_AREAS.map((area) => `<option ${selectedArea === area ? "selected" : ""}>${area}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+const CITY_AREAS_FORM = {
+  "Хургада": ["Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar", "Эль Ахья"],
+  "Шарм-эль-Шейх": ["Naama Bay", "Hadaba", "Sharks Bay", "Nabq Bay", "Old Market", "SOHO Square"],
+};
+
+const SEARCH_CITIES_FORM = Object.keys(CITY_AREAS_FORM);
+
+function renderCitySelectField(selectedCity = "Хургада") {
+  return `
+    <label class="field">
+      <span>Город</span>
+      <select name="city" data-auth-city required>
+        ${SEARCH_CITIES_FORM.map((city) => `<option ${selectedCity === city ? "selected" : ""}>${city}</option>`).join("")}
+      </select>
+    </label>
+  `;
+}
+
+function renderSearchAreaOptions(city = "Хургада", selectedArea = "") {
+  const areas = CITY_AREAS_FORM[city] || CITY_AREAS_FORM["Хургада"];
+  const currentArea = selectedArea || areas[0];
+  return areas.map((area) => `<option ${currentArea === area ? "selected" : ""}>${area}</option>`).join("");
+}
+
+renderSearchAreaField = function renderSearchAreaFieldByCity(selectedArea = "Marina", city = "Хургада") {
+  return `
+    <label class="field">
+      <span>Район поиска</span>
+      <select name="searchArea" data-search-area required>
+        ${renderSearchAreaOptions(city, selectedArea)}
+      </select>
+    </label>
+  `;
+};
+
+function bindCityAreaPicker() {
+  const citySelect = document.querySelector("[data-auth-city]");
+  const areaSelect = document.querySelector("[data-search-area]");
+  if (!citySelect || !areaSelect) return;
+
+  citySelect.addEventListener("change", () => {
+    areaSelect.innerHTML = renderSearchAreaOptions(citySelect.value);
+  });
+}
+
+const renderAuthBeforeSearchArea = renderAuth;
+renderAuth = function renderAuthWithSearchArea() {
+  const html = renderAuthBeforeSearchArea();
+  if (authEntryMode === "choice") {
+    return html;
+  }
+
+  const withoutAuthModeTabs = html.replace(/<div class="tabs">[\s\S]*?<\/div>\s*/, "");
+
+  const withCitySelect = authMode === "register"
+    ? withoutAuthModeTabs.replace(
+        /<label class="field"><span>.*?<\/span><input name="city"[^>]*><\/label>/s,
+        renderCitySelectField()
+      )
+    : withoutAuthModeTabs;
+
+  const withArea = authMode === "register" && !withCitySelect.includes('name="searchArea"')
+    ? withCitySelect.replace(
+        /(<label class="field">[\s\S]*?<select name="city"[\s\S]*?<\/select>\s*<\/label>)/s,
+        `$1${renderSearchAreaField()}`
+      ).replace(
+        /(<label class="field"><span>.*?<\/span><input name="city"[^>]*><\/label>)/s,
+        `$1${renderSearchAreaField()}`
+      )
+    : withCitySelect;
+
+  const formSwitch = authMode === "login"
+    ? `<div class="auth-form-switch"><span>Еще нет аккаунта?</span><button class="ghost auth-link-button" type="button" data-action="switch-register">Зарегистрироваться</button></div>`
+    : `<div class="auth-form-switch"><span>Уже есть аккаунт?</span><button class="ghost auth-link-button" type="button" data-action="switch-login">Войти</button></div>`;
+
+  const withFormNav = withArea
+    .replace(
+      '<div class="panel auth-panel">',
+      '<div class="panel auth-panel"><button class="ghost auth-back-button" type="button" data-action="back-auth-choice">Назад</button>'
+    )
+    .replace('</form>', `${formSwitch}</form>`);
+
+  return withFormNav
+    .replace('auth-layout', 'auth-layout auth-layout-form')
+    .replace('<div class="intro">', '<div class="intro auth-form-intro">');
+};
+
+const bindEventsBeforeAuthFormNav = bindEvents;
+bindEvents = function bindEventsWithAuthFormNav() {
+  bindEventsBeforeAuthFormNav();
+  bindCityAreaPicker();
+
+  document.querySelector("[data-action='back-auth-choice']")?.addEventListener("click", () => {
+    authEntryMode = "choice";
+    app();
+  });
+
+  document.querySelector("[data-action='switch-register']")?.addEventListener("click", () => {
+    authEntryMode = "form";
+    authMode = "register";
+    app();
+  });
+
+  document.querySelector("[data-action='switch-login']")?.addEventListener("click", () => {
+    authEntryMode = "form";
+    authMode = "login";
+    app();
+  });
+};
+
+const handleAuthBeforeSearchArea = handleAuth;
+handleAuth = function handleAuthWithSearchArea(event) {
+  const form = new FormData(event.currentTarget);
+  const searchArea = String(form.get("searchArea") || "").trim();
+  handleAuthBeforeSearchArea(event);
+
+  const user = currentUser();
+  if (user && !user.isGuest && searchArea) {
+    user.searchArea = searchArea;
+    state.location = { city: user.city || "Хургада", area: searchArea };
+    saveState();
+  }
+};
+
+renderTopbar = function renderTopbarWithSearchArea(user) {
+  const area = user && !user.isGuest ? user.searchArea : "";
+  return `
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">Х</div>
+        <div>
+          <h1 class="brand-title">ХурМа</h1>
+          <p class="brand-subtitle">сервисы для жизни в Хургаде</p>
+        </div>
+      </div>
+      <div class="user-tools">
+        ${
+          area
+            ? `<span class="location-pill location-pill-static"><span>Район поиска</span><strong>${escapeHtml(area)}</strong></span>`
+            : ""
+        }
+        ${
+          user
+            ? `<span class="role-pill">${user.role === "executor" ? "Исполнитель" : user.isGuest ? "Гость" : "Клиент"} · ${escapeHtml(user.name)}</span>
+               <button class="secondary" data-action="logout">Выйти</button>`
+            : `<span class="role-pill">Демо: client@hurma.local / 123456</span>`
+        }
+      </div>
+    </header>
+  `;
+};
+
+app = function appWithoutLocationGate() {
+  appBeforeLocationGate();
+};
+
+let profileSaveLocked = false;
+
+function normalizeProfileCity(city) {
+  return CITY_AREAS_FORM[city] ? city : "Хургада";
+}
+
+function normalizeProfileArea(city, area) {
+  const normalizedCity = normalizeProfileCity(city);
+  const areas = CITY_AREAS_FORM[normalizedCity] || CITY_AREAS_FORM["Хургада"];
+  return areas.includes(area) ? area : areas[0];
+}
+
+function renderProfileLocationFields(user) {
+  const city = normalizeProfileCity(user.city || "Хургада");
+  const area = normalizeProfileArea(city, user.searchArea || "");
+  return `${renderCitySelectField(city)}${renderSearchAreaField(area, city)}`;
+}
+
+const renderProfileBeforeLocationFields = renderProfile;
+renderProfile = function renderProfileWithLocationFields(user) {
+  if (!user || user.isGuest) {
+    return renderProfileBeforeLocationFields(user);
+  }
+
+  const html = renderProfileBeforeLocationFields(user).replace(
+    /<label class="field"><span>.*?<\/span><input name="city"[^>]*><\/label>/g,
+    renderProfileLocationFields(user)
+  );
+
+  if (!profileSaveLocked) {
+    return html;
+  }
+
+  return html.replace(
+    /<button class="primary" type="submit">/g,
+    '<button class="primary" type="submit" disabled>'
+  );
+};
+
+function saveProfileLocationFromForm(user, form) {
+  const city = normalizeProfileCity(String(form.get("city") || "").trim());
+  const searchArea = normalizeProfileArea(city, String(form.get("searchArea") || "").trim());
+  user.city = city;
+  user.searchArea = searchArea;
+  state.location = { city, area: searchArea };
+}
+
+const handleClientProfileBeforeLocationFields = handleClientProfile;
+handleClientProfile = function handleClientProfileWithLocationFields(event) {
+  const form = new FormData(event.currentTarget);
+  handleClientProfileBeforeLocationFields(event);
+
+  const user = currentUser();
+  if (user && !user.isGuest) {
+    saveProfileLocationFromForm(user, form);
+    profileSaveLocked = true;
+    saveState();
+    app();
+  }
+};
+
+const handleExecutorProfileBeforeLocationFields = handleExecutorProfile;
+handleExecutorProfile = function handleExecutorProfileWithLocationFields(event) {
+  const form = new FormData(event.currentTarget);
+  handleExecutorProfileBeforeLocationFields(event);
+
+  const user = currentUser();
+  if (user && !user.isGuest) {
+    saveProfileLocationFromForm(user, form);
+    profileSaveLocked = true;
+    saveState();
+    app();
+  }
+};
+
+const bindEventsBeforeProfileSaveLock = bindEvents;
+bindEvents = function bindEventsWithProfileSaveLock() {
+  bindEventsBeforeProfileSaveLock();
+
+  document.querySelectorAll("[data-form='client-profile'], [data-form='executor-profile']").forEach((form) => {
+    const unlockSave = () => {
+      profileSaveLocked = false;
+      form.querySelector("button[type='submit']")?.removeAttribute("disabled");
+    };
+
+    form.addEventListener("input", unlockSave);
+    form.addEventListener("change", unlockSave);
+  });
+};
+
 function renderBootError(error) {
   console.error("Hurma render error:", error);
   document.querySelector("#app").innerHTML = `
@@ -2882,7 +3273,7 @@ function renderBootError(error) {
         <div class="panel empty-state">
           <div>
             <strong>Не удалось открыть интерфейс</strong>
-            <span>Обновите страницу. Если не поможет, очистите данные сайта для этого файла и откройте снова.</span>
+            <span>Обновите приложение. Если не поможет, очистите данные приложения и откройте снова.</span>
           </div>
         </div>
       </main>
