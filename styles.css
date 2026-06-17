@@ -501,6 +501,13 @@ button {
   line-height: 0.95;
 }
 
+.hero-brand-word {
+  color: transparent;
+  background: linear-gradient(110deg, #f1c96e 0%, #f5df9a 30%, #32b7aa 62%, #087286 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
 .intro p {
   max-width: 620px;
   margin: 0;

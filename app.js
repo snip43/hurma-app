@@ -1073,7 +1073,7 @@ function renderAuth() {
     <section class="auth-layout">
       <div class="intro">
         <div>
-          <h1>ХурМа для солнечной Хургады</h1>
+          <h1><span class="hero-brand-word">ХурМа</span> для солнечной Хургады</h1>
           <p>Найдите трансфер, клининг или события рядом. Клиенты выбирают сервис и пишут исполнителю, а исполнители регистрируются в своей категории.</p>
         </div>
         <div class="intro-stats">
@@ -2808,7 +2808,7 @@ renderAuth = function renderAuthWithEntryChoice() {
     <section class="auth-layout">
       <div class="intro">
         <div>
-          <h1>ХурМа для солнечной Хургады</h1>
+          <h1><span class="hero-brand-word">ХурМа</span> для солнечной Хургады</h1>
           <p>Выберите сервис, найдите исполнителя, посмотрите афишу и начните общение после регистрации.</p>
         </div>
         <div class="intro-stats">
