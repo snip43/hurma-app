@@ -215,6 +215,22 @@ function mapDatabaseEvent(event) {
   };
 }
 
+function mapDatabaseExecutor(executor) {
+  return {
+    id: `db:${executor.user_id}`,
+    databaseUserId: executor.user_id,
+    name: executor.display_name,
+    city: executor.city,
+    area: executor.service_area || "",
+    category: executor.category === "cleaning" ? "Клининг" : "Трансфер",
+    title: executor.headline,
+    price: executor.price_from == null ? "Цена по договоренности" : `от ${Number(executor.price_from)} $`,
+    rating: Number(executor.rating || 0).toFixed(1),
+    about: executor.bio,
+    skills: [...(executor.tags || []), ...(executor.languages || [])],
+  };
+}
+
 async function loadSupabaseUser(authUser) {
   const [{ data: profile, error: profileError }, { data: subscription, error: subscriptionError }] = await Promise.all([
     supabaseClient.from("profiles").select("id, display_name, role, city, search_area").eq("id", authUser.id).single(),
@@ -229,6 +245,7 @@ async function loadSupabaseUser(authUser) {
     name: profile.display_name,
     city: profile.city,
     searchArea: profile.search_area || "Marina",
+    category: authUser.user_metadata?.category || "Трансфер",
     subscription,
     subscriptionActive: subscriptionIsActive(subscription),
   };
@@ -467,7 +484,7 @@ function Nav({ view, setView, user }) {
   );
 }
 
-function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading, eventsError }) {
+function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading, eventsError, databaseExecutors, reloadExecutors }) {
   const [view, setView] = useState("services");
   const [service, setService] = useState("");
   const [chatId, setChatId] = useState("");
@@ -493,15 +510,15 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
     <section className="workspace">
       <Nav view={view} setView={setView} user={user} />
       <section className="content">
-        {view === "services" ? <Services user={user} service={service} setService={setService} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : null}
+        {view === "services" ? <Services user={user} service={service} setService={setService} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} /> : null}
-        {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} /> : null}
+        {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} /> : null}
       </section>
     </section>
   );
 }
 
-function Services({ user, service, setService, onRequireSubscription, onStartChat, events, eventsLoading, eventsError }) {
+function Services({ user, service, setService, onRequireSubscription, onStartChat, events, eventsLoading, eventsError, databaseExecutors }) {
   if (!service) {
     return (
       <div className="service-tabs">
@@ -524,14 +541,14 @@ function Services({ user, service, setService, onRequireSubscription, onStartCha
           Все сервисы
         </button>
       </div>
-      {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} sourceEvents={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : <ExecutorList service={service} user={user} onStartChat={onStartChat} />}
+      {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} sourceEvents={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : <ExecutorList service={service} user={user} onStartChat={onStartChat} databaseExecutors={databaseExecutors} />}
     </>
   );
 }
 
-function ExecutorList({ service, user, onStartChat }) {
+function ExecutorList({ service, user, onStartChat, databaseExecutors }) {
   const [q, setQ] = useState("");
-  const items = EXECUTORS.filter((executor) => executor.category === service && `${executor.name} ${executor.title} ${executor.area}`.toLowerCase().includes(q.toLowerCase()));
+  const items = [...databaseExecutors, ...EXECUTORS].filter((executor) => executor.category === service && `${executor.name} ${executor.title} ${executor.area}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <>
       <div className="panel searchbar">
@@ -722,10 +739,55 @@ function Messages({ chatId, setChatId, user }) {
   );
 }
 
-function Profile({ user, setUser }) {
+function Profile({ user, setUser, reloadExecutors }) {
   const [draft, setDraft] = useState(user);
   const [locked, setLocked] = useState(false);
+  const [executorDraft, setExecutorDraft] = useState({
+    category: user.category || "Трансфер",
+    headline: "",
+    bio: "",
+    serviceArea: user.searchArea || "Marina",
+    priceFrom: "",
+    languages: "Русский",
+    tags: "",
+    isPublished: false,
+  });
+  const [executorLoading, setExecutorLoading] = useState(user.role === "executor");
+  const [executorMessage, setExecutorMessage] = useState("");
+  const [executorError, setExecutorError] = useState("");
   const areas = areaOptions(draft.city);
+
+  useEffect(() => {
+    if (user.role !== "executor") return;
+    let active = true;
+    supabaseClient
+      .from("executor_profiles")
+      .select("category, headline, bio, service_area, price_from, languages, tags, is_published")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          setExecutorError(error.message);
+        } else if (data) {
+          setExecutorDraft({
+            category: data.category === "cleaning" ? "Клининг" : "Трансфер",
+            headline: data.headline,
+            bio: data.bio,
+            serviceArea: data.service_area || user.searchArea || "Marina",
+            priceFrom: data.price_from == null ? "" : String(data.price_from),
+            languages: (data.languages || []).join(", "),
+            tags: (data.tags || []).join(", "),
+            isPublished: data.is_published,
+          });
+        }
+        setExecutorLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [user.id, user.role]);
+
   function change(key, value) {
     setLocked(false);
     setDraft((current) => {
@@ -748,24 +810,96 @@ function Profile({ user, setUser }) {
     setUser(draft);
     setLocked(true);
   }
+
+  function changeExecutor(key, value) {
+    setExecutorMessage("");
+    setExecutorError("");
+    setExecutorDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  async function publishExecutor(event) {
+    event.preventDefault();
+    setExecutorMessage("");
+    setExecutorError("");
+    if (!executorDraft.headline.trim() || !executorDraft.bio.trim()) {
+      setExecutorError("Заполните заголовок и описание объявления.");
+      return;
+    }
+    const splitList = (value) => value.split(",").map((item) => item.trim()).filter(Boolean);
+    const payload = {
+      user_id: user.id,
+      display_name: draft.name.trim(),
+      category: executorDraft.category === "Клининг" ? "cleaning" : "transfer",
+      headline: executorDraft.headline.trim(),
+      bio: executorDraft.bio.trim(),
+      city: draft.city,
+      service_area: executorDraft.serviceArea,
+      price_from: executorDraft.priceFrom === "" ? null : Number(executorDraft.priceFrom),
+      currency: "USD",
+      languages: splitList(executorDraft.languages),
+      tags: splitList(executorDraft.tags),
+      is_published: true,
+    };
+    const { error } = await supabaseClient
+      .from("executor_profiles")
+      .upsert(payload, { onConflict: "user_id" });
+    if (error) {
+      setExecutorError(error.message);
+      return;
+    }
+    setExecutorDraft((current) => ({ ...current, isPublished: true }));
+    setExecutorMessage("Объявление опубликовано и появилось в списке исполнителей.");
+    await reloadExecutors();
+  }
+
   return (
-    <div className="panel profile-panel">
-      <h2 className="section-title">{user.role === "executor" ? "Анкета исполнителя" : "Профиль клиента"}</h2>
-      <p className="section-note">Эти данные можно изменить при необходимости.</p>
-      <form className="form" onSubmit={save}>
-        <div className="two-col">
-          <label className="field"><span>Имя</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
-          <label className="field"><span>Город</span><select value={draft.city} onChange={(event) => change("city", event.target.value)}>{Object.keys(CITIES).map((city) => <option key={city}>{city}</option>)}</select></label>
+    <div className="profile-stack">
+      <div className="panel profile-panel">
+        <h2 className="section-title">{user.role === "executor" ? "Профиль исполнителя" : "Профиль клиента"}</h2>
+        <p className="section-note">Эти данные можно изменить при необходимости.</p>
+        <form className="form" onSubmit={save}>
+          <div className="two-col">
+            <label className="field"><span>Имя</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
+            <label className="field"><span>Город</span><select value={draft.city} onChange={(event) => change("city", event.target.value)}>{Object.keys(CITIES).map((city) => <option key={city}>{city}</option>)}</select></label>
+          </div>
+          <label className="field"><span>Район поиска</span><select value={draft.searchArea} onChange={(event) => change("searchArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
+          <button className="primary" type="submit" disabled={locked}>Сохранить профиль</button>
+        </form>
+      </div>
+
+      {user.role === "executor" ? (
+        <div className="panel profile-panel executor-publish-panel">
+          <div className="publish-heading">
+            <div>
+              <h2 className="section-title">Объявление исполнителя</h2>
+              <p className="section-note">После публикации клиенты увидят объявление в выбранном сервисе.</p>
+            </div>
+            <span className={`publication-status ${executorDraft.isPublished ? "active" : ""}`}>
+              {executorDraft.isPublished ? "Опубликовано" : "Не опубликовано"}
+            </span>
+          </div>
+          {executorLoading ? <div className="form-info">Загружаем объявление...</div> : (
+            <form className="form" onSubmit={publishExecutor}>
+              <div className="two-col">
+                <label className="field"><span>Сервис</span><select value={executorDraft.category} onChange={(event) => changeExecutor("category", event.target.value)}><option>Трансфер</option><option>Клининг</option></select></label>
+                <label className="field"><span>Район работы</span><select value={executorDraft.serviceArea} onChange={(event) => changeExecutor("serviceArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
+              </div>
+              <label className="field"><span>Заголовок объявления</span><input value={executorDraft.headline} onChange={(event) => changeExecutor("headline", event.target.value)} placeholder="Например, трансфер из аэропорта и поездки по городу" /></label>
+              <label className="field"><span>Описание услуг</span><textarea value={executorDraft.bio} onChange={(event) => changeExecutor("bio", event.target.value)} placeholder="Расскажите об автомобиле, маршрутах и условиях работы" /></label>
+              <div className="two-col">
+                <label className="field"><span>Цена от, $</span><input type="number" min="0" step="1" value={executorDraft.priceFrom} onChange={(event) => changeExecutor("priceFrom", event.target.value)} placeholder="12" /></label>
+                <label className="field"><span>Языки через запятую</span><input value={executorDraft.languages} onChange={(event) => changeExecutor("languages", event.target.value)} placeholder="Русский, Английский, Арабский" /></label>
+              </div>
+              <label className="field"><span>Особенности через запятую</span><input value={executorDraft.tags} onChange={(event) => changeExecutor("tags", event.target.value)} placeholder="Аэропорт, детское кресло, минивэн" /></label>
+              {executorError ? <div className="error">{executorError}</div> : null}
+              {executorMessage ? <div className="form-info">{executorMessage}</div> : null}
+              <button className="primary publish-button" type="submit">
+                {executorDraft.isPublished ? "Обновить объявление" : "Разместить объявление"}
+              </button>
+            </form>
+          )}
         </div>
-        <label className="field"><span>Район поиска</span><select value={draft.searchArea} onChange={(event) => change("searchArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
-        {user.role === "executor" ? (
-          <>
-            <label className="field"><span>Сервис</span><select value={draft.category || "Трансфер"} onChange={(event) => change("category", event.target.value)}><option>Трансфер</option><option>Клининг</option></select></label>
-            <label className="field"><span>О себе</span><textarea value={draft.about || ""} onChange={(event) => change("about", event.target.value)} /></label>
-          </>
-        ) : null}
-        <button className="primary" type="submit" disabled={locked}>Сохранить</button>
-      </form>
+      ) : null}
     </div>
   );
 }
@@ -795,6 +929,7 @@ function App() {
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [eventsError, setEventsError] = useState("");
+  const [databaseExecutors, setDatabaseExecutors] = useState([]);
   const [modal, setModal] = useState(false);
   const [appKey, setAppKey] = useState(0);
 
@@ -836,6 +971,20 @@ function App() {
       active = false;
       authListener?.data?.subscription?.unsubscribe();
     };
+  }, []);
+
+  async function loadExecutors() {
+    if (!supabaseClient) return;
+    const { data, error } = await supabaseClient
+      .from("executor_profiles")
+      .select("user_id, display_name, category, headline, bio, city, service_area, price_from, languages, tags, rating")
+      .eq("is_published", true)
+      .order("created_at", { ascending: false });
+    if (!error) setDatabaseExecutors(data.map(mapDatabaseExecutor));
+  }
+
+  useEffect(() => {
+    loadExecutors();
   }, []);
 
   useEffect(() => {
@@ -950,7 +1099,7 @@ function App() {
           <AuthChoice onLogin={() => { setFormMode("login"); setAuthMode("form"); }} onRegister={() => { setFormMode("register"); setAuthMode("form"); }} onGuest={() => authSubmit({ mode: "guest" })} />
         ) : null}
         {!user && authMode === "form" ? <AuthForm mode={formMode} setMode={setFormMode} onBack={() => setAuthMode("choice")} onSubmit={authSubmit} /> : null}
-        {user ? <Workspace user={user} setUser={setUser} onRequireSubscription={() => setModal(true)} events={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : null}
+        {user ? <Workspace user={user} setUser={setUser} onRequireSubscription={() => setModal(true)} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} reloadExecutors={loadExecutors} /> : null}
       </main>
       {modal ? <SubscriptionModal onClose={() => setModal(false)} onRegister={() => { setModal(false); setUser(null); setAuthMode("form"); setFormMode("register"); }} /> : null}
     </div>
