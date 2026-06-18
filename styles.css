@@ -713,6 +713,24 @@ button {
   flex-wrap: wrap;
 }
 
+.password-recovery-link {
+  justify-self: end;
+  margin-top: -6px;
+  padding: 2px 0;
+  border: 0;
+  color: var(--brand-dark);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.password-recovery-link:hover {
+  color: var(--brand);
+}
+
 .auth-link-button {
   min-height: 36px;
   padding: 0 10px;
