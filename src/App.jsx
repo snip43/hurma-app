@@ -344,13 +344,15 @@ function AuthChoice({ onLogin, onRegister, onGuest }) {
   );
 }
 
-function AuthForm({ mode, setMode, onBack, onSubmit }) {
+function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
   const [role, setRole] = useState("client");
   const [city, setCity] = useState("Хургада");
   const [searchArea, setSearchArea] = useState("Marina");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [pending, setPending] = useState(false);
+  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [emailValue, setEmailValue] = useState("");
 
   useEffect(() => {
     setSearchArea(areaOptions(city)[0]);
@@ -384,6 +386,50 @@ function AuthForm({ mode, setMode, onBack, onSubmit }) {
     } finally {
       setPending(false);
     }
+  }
+
+  async function submitRecovery(event) {
+    event.preventDefault();
+    setError("");
+    setInfo("");
+    const email = emailValue.trim().toLowerCase();
+    if (!email) {
+      setError("Введите email, указанный при регистрации.");
+      return;
+    }
+    setPending(true);
+    try {
+      const result = await onResetPassword(email);
+      if (result.error) setError(result.error);
+      if (result.info) setInfo(result.info);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  if (mode === "login" && recoveryMode) {
+    return (
+      <section className="auth-layout auth-layout-form">
+        <div className="panel auth-panel">
+          <button className="ghost auth-back-button" type="button" onClick={() => { setRecoveryMode(false); setError(""); setInfo(""); }}>
+            Назад ко входу
+          </button>
+          <h2 className="section-title">Восстановить пароль</h2>
+          <p className="section-note">Укажите email аккаунта. Мы отправим ссылку для создания нового пароля.</p>
+          <form className="form" onSubmit={submitRecovery}>
+            <label className="field">
+              <span>Email</span>
+              <input type="email" value={emailValue} onChange={(event) => setEmailValue(event.target.value)} placeholder="you@example.com" required />
+            </label>
+            <div className="error">{error}</div>
+            {info ? <div className="form-info">{info}</div> : null}
+            <button className="primary" type="submit" disabled={pending}>
+              {pending ? "Отправляем..." : "Отправить ссылку"}
+            </button>
+          </form>
+        </div>
+      </section>
+    );
   }
 
   return (
@@ -438,12 +484,17 @@ function AuthForm({ mode, setMode, onBack, onSubmit }) {
           ) : null}
           <label className="field">
             <span>Email</span>
-            <input name="email" type="email" placeholder="you@example.com" required />
+            <input name="email" type="email" value={emailValue} onChange={(event) => setEmailValue(event.target.value)} placeholder="you@example.com" required />
           </label>
           <label className="field">
             <span>Пароль</span>
             <input name="password" type="password" placeholder="Минимум 6 символов" required />
           </label>
+          {mode === "login" ? (
+            <button className="password-recovery-link" type="button" onClick={() => { setRecoveryMode(true); setError(""); setInfo(""); }}>
+              Забыли пароль?
+            </button>
+          ) : null}
           <div className="error">{error}</div>
           {info ? <div className="form-info">{info}</div> : null}
           <button className="primary" type="submit" disabled={pending}>
@@ -458,6 +509,61 @@ function AuthForm({ mode, setMode, onBack, onSubmit }) {
               {mode === "login" ? "Зарегистрироваться" : "Войти"}
             </button>
           </div>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+function PasswordRecoveryForm({ onComplete }) {
+  const [password, setPassword] = useState("");
+  const [confirmation, setConfirmation] = useState("");
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setError("");
+    if (password.length < 6) {
+      setError("Пароль должен быть не короче 6 символов.");
+      return;
+    }
+    if (password !== confirmation) {
+      setError("Пароли не совпадают.");
+      return;
+    }
+    setPending(true);
+    try {
+      const { error: updateError } = await supabaseClient.auth.updateUser({ password });
+      if (updateError) {
+        setError(updateError.message);
+        return;
+      }
+      await supabaseClient.auth.signOut();
+      onComplete();
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <section className="auth-layout auth-layout-form">
+      <div className="panel auth-panel">
+        <h2 className="section-title">Создать новый пароль</h2>
+        <p className="section-note">Введите новый пароль дважды. После сохранения войдите в аккаунт с новым паролем.</p>
+        <form className="form" onSubmit={submit}>
+          <label className="field">
+            <span>Новый пароль</span>
+            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Минимум 6 символов" required />
+          </label>
+          <label className="field">
+            <span>Повторите пароль</span>
+            <input type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder="Повторите новый пароль" required />
+          </label>
+          <div className="error">{error}</div>
+          <button className="primary" type="submit" disabled={pending}>
+            {pending ? "Сохраняем..." : "Сохранить новый пароль"}
+          </button>
         </form>
       </div>
     </section>
@@ -932,6 +1038,7 @@ function App() {
   const [databaseExecutors, setDatabaseExecutors] = useState([]);
   const [modal, setModal] = useState(false);
   const [appKey, setAppKey] = useState(0);
+  const [passwordRecovery, setPasswordRecovery] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -955,6 +1062,12 @@ function App() {
     const authListener = supabaseClient
       ? supabaseClient.auth.onAuthStateChange((event, session) => {
           if (event === "SIGNED_OUT" && active) setUserState(null);
+          if (event === "PASSWORD_RECOVERY" && active) {
+            setPasswordRecovery(true);
+            setUserState(null);
+            setAuthMode("form");
+            setFormMode("login");
+          }
           if (event === "SIGNED_IN" && session && active) {
             setTimeout(async () => {
               try {
@@ -1089,17 +1202,27 @@ function App() {
     return { ok: true };
   }
 
+  async function resetPassword(email) {
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) return { error: error.message };
+    return { info: "Если аккаунт с таким email существует, письмо со ссылкой уже отправлено. Проверьте также папку «Спам»." };
+  }
+
   if (loading) return <LoadingScreen />;
 
   return (
     <div className="app-shell" key={appKey}>
       <Header user={user} onHome={home} onLogout={logout} />
       <main className="main">
-        {!user && authMode === "choice" ? (
+        {passwordRecovery ? (
+          <PasswordRecoveryForm onComplete={() => { setPasswordRecovery(false); setAuthMode("form"); setFormMode("login"); }} />
+        ) : null}
+        {!passwordRecovery && !user && authMode === "choice" ? (
           <AuthChoice onLogin={() => { setFormMode("login"); setAuthMode("form"); }} onRegister={() => { setFormMode("register"); setAuthMode("form"); }} onGuest={() => authSubmit({ mode: "guest" })} />
         ) : null}
-        {!user && authMode === "form" ? <AuthForm mode={formMode} setMode={setFormMode} onBack={() => setAuthMode("choice")} onSubmit={authSubmit} /> : null}
-        {user ? <Workspace user={user} setUser={setUser} onRequireSubscription={() => setModal(true)} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} reloadExecutors={loadExecutors} /> : null}
+        {!passwordRecovery && !user && authMode === "form" ? <AuthForm mode={formMode} setMode={setFormMode} onBack={() => setAuthMode("choice")} onSubmit={authSubmit} onResetPassword={resetPassword} /> : null}
+        {!passwordRecovery && user ? <Workspace user={user} setUser={setUser} onRequireSubscription={() => setModal(true)} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} reloadExecutors={loadExecutors} /> : null}
       </main>
       {modal ? <SubscriptionModal onClose={() => setModal(false)} onRegister={() => { setModal(false); setUser(null); setAuthMode("form"); setFormMode("register"); }} /> : null}
     </div>
