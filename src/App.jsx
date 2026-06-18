@@ -1,4 +1,4 @@
-const { useEffect, useMemo, useState } = React;
+const { useEffect, useMemo, useRef, useState } = React;
 
 const STORAGE_KEY = "hurma-react-state-v1";
 const supabaseConfig = window.HURMA_SUPABASE || {};
@@ -1039,6 +1039,7 @@ function App() {
   const [modal, setModal] = useState(false);
   const [appKey, setAppKey] = useState(0);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const passwordRecoveryRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -1063,15 +1064,18 @@ function App() {
       ? supabaseClient.auth.onAuthStateChange((event, session) => {
           if (event === "SIGNED_OUT" && active) setUserState(null);
           if (event === "PASSWORD_RECOVERY" && active) {
+            passwordRecoveryRef.current = true;
             setPasswordRecovery(true);
             setUserState(null);
             setAuthMode("form");
             setFormMode("login");
           }
-          if (event === "SIGNED_IN" && session && active) {
+          if (event === "SIGNED_IN" && session && active && !passwordRecoveryRef.current) {
             setTimeout(async () => {
               try {
-                if (active) setUserState(await loadSupabaseUser(session.user));
+                if (active && !passwordRecoveryRef.current) {
+                  setUserState(await loadSupabaseUser(session.user));
+                }
               } catch (error) {
                 console.error("Supabase profile error", error);
               }
@@ -1213,10 +1217,16 @@ function App() {
 
   return (
     <div className="app-shell" key={appKey}>
-      <Header user={user} onHome={home} onLogout={logout} />
+      <Header user={passwordRecovery ? null : user} onHome={home} onLogout={logout} />
       <main className="main">
         {passwordRecovery ? (
-          <PasswordRecoveryForm onComplete={() => { setPasswordRecovery(false); setAuthMode("form"); setFormMode("login"); }} />
+          <PasswordRecoveryForm onComplete={() => {
+            passwordRecoveryRef.current = false;
+            setPasswordRecovery(false);
+            setUserState(null);
+            setAuthMode("form");
+            setFormMode("login");
+          }} />
         ) : null}
         {!passwordRecovery && !user && authMode === "choice" ? (
           <AuthChoice onLogin={() => { setFormMode("login"); setAuthMode("form"); }} onRegister={() => { setFormMode("register"); setAuthMode("form"); }} onGuest={() => authSubmit({ mode: "guest" })} />
