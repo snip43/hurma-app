@@ -1225,8 +1225,16 @@ function App() {
       }
       return { ok: true };
     }
+    const normalizedEmail = String(data.email || "").trim().toLowerCase();
+    const duplicateEmailMessage = "Пользователь с таким email уже существует в базе, выполните вход.";
+    const { data: emailExists, error: emailCheckError } = await supabaseClient.rpc("user_email_exists", {
+      check_email: normalizedEmail,
+    });
+    if (emailCheckError) console.warn("Email duplicate check failed", emailCheckError);
+    if (emailExists) return { error: duplicateEmailMessage };
+
     const { data: authData, error } = await supabaseClient.auth.signUp({
-      email: data.email,
+      email: normalizedEmail,
       password: data.password,
       options: {
         data: {
@@ -1238,9 +1246,18 @@ function App() {
         },
       },
     });
-    if (error) return { error: error.message };
+    if (error) {
+      const message = String(error.message || "");
+      if (/already|registered|exists|duplicate/i.test(message)) return { error: duplicateEmailMessage };
+      return { error: error.message };
+    }
+    const duplicateIdentity =
+      authData?.user &&
+      Array.isArray(authData.user.identities) &&
+      authData.user.identities.length === 0;
+    if (duplicateIdentity) return { error: duplicateEmailMessage };
     if (!authData.session) {
-      return { info: "Регистрация создана. Подтвердите email по ссылке в письме, затем выполните вход." };
+      return { info: "Регистрация завершена. Подтвердите email по ссылке в письме, затем выполните вход." };
     }
     try {
       setUserState(await loadSupabaseUser(authData.user));
