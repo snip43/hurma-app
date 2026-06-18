@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260618-recovery-header" />
+    <link rel="stylesheet" href="styles.css?v=20260618-loading-logo-safe" />
   </head>
   <body>
     <div id="app">
@@ -1261,7 +1261,7 @@ function App() {
   if (loading) return <LoadingScreen />;
 
   return (
-    <div className="app-shell" key={appKey}>
+    <div className={`app-shell ${!user || passwordRecovery ? "auth-screen" : ""}`} key={appKey}>
       <Header user={passwordRecovery ? null : user} onHome={home} onLogout={logout} />
       <main className="main">
         {passwordRecovery ? (

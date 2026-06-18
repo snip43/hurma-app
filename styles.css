@@ -96,17 +96,22 @@ button {
 .loading-logo {
   position: relative;
   z-index: 3;
-  display: inline-block;
-  max-width: 100%;
+  display: block;
+  max-width: calc(100% + 0.34em);
+  padding: 0.08em 0.17em 0.12em;
+  margin: -0.08em -0.17em -0.12em;
+  overflow: visible;
   color: transparent;
   background: linear-gradient(100deg, #f7d56d 0%, #ead69b 28%, #00a7a0 58%, #0b6f97 82%, #f7d56d 100%);
   background-size: 240% 100%;
   -webkit-background-clip: text;
   background-clip: text;
-  font-family: "Anton", Impact, "Arial Narrow", sans-serif;
-  font-size: clamp(52px, 14vw, 128px);
-  font-weight: 400;
-  line-height: 0.92;
+  -webkit-text-fill-color: transparent;
+  font-family: "Arial Black", Arial, Helvetica, sans-serif;
+  font-size: clamp(3.25rem, 14vw, 8rem);
+  font-weight: 900;
+  line-height: 1.14;
+  letter-spacing: 0;
   text-align: center;
   text-transform: none;
   text-shadow: 0 12px 40px rgba(0, 43, 52, 0.28);
@@ -1831,13 +1836,55 @@ button {
 }
 
 @media (max-width: 680px) {
-  .topbar,
-  .user-tools,
+  .auth-screen .topbar {
+    display: none;
+  }
+
+  .auth-screen .main {
+    width: min(100% - 20px, 560px);
+    padding: 10px 0 16px;
+  }
+
   .executor-footer,
   .publish-heading,
   .chat-head {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: auto;
+    padding: 10px 12px;
+  }
+
+  .brand {
+    gap: 9px;
+  }
+
+  .brand-mark {
+    width: 42px;
+    height: 42px;
+    font-size: 22px;
+  }
+
+  .brand-title {
+    font-size: 22px;
+  }
+
+  .brand-subtitle {
+    display: none;
+  }
+
+  .user-tools {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
   }
 
   .intro-stats,
@@ -1878,12 +1925,12 @@ button {
     grid-template-columns: 1fr;
   }
 
-  .intro {
-    min-height: 680px;
+  .auth-screen .intro {
+    min-height: min(650px, calc(100svh - 26px));
     align-content: start;
     gap: 12px;
-    padding: 20px;
-    padding-bottom: 248px;
+    padding: 18px;
+    padding-bottom: 184px;
   }
 
   .intro-stats {
@@ -1977,18 +2024,32 @@ button {
     padding: 18px;
   }
 
-  .location-pill,
+  .location-pill {
+    display: none;
+  }
+
   .role-pill {
-    width: 100%;
+    min-width: 0;
+    max-width: min(42vw, 190px);
+    min-height: 34px;
+    padding: 5px 9px;
     justify-content: center;
+    font-size: 12px;
+  }
+
+  .user-tools .secondary {
+    min-height: 34px;
+    padding: 0 11px;
+    flex: 0 0 auto;
+    font-size: 13px;
   }
 }
 
 @media (max-width: 380px) {
-  .intro {
-    min-height: 710px;
-    padding: 18px;
-    padding-bottom: 238px;
+  .auth-screen .intro {
+    min-height: min(630px, calc(100svh - 22px));
+    padding: 16px;
+    padding-bottom: 180px;
   }
 
   .intro h1 {
