@@ -1,6 +1,10 @@
 const { useEffect, useMemo, useState } = React;
 
 const STORAGE_KEY = "hurma-react-state-v1";
+const supabaseConfig = window.HURMA_SUPABASE || {};
+const supabaseClient = window.supabase && supabaseConfig.url && supabaseConfig.publishableKey
+  ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.publishableKey)
+  : null;
 
 const CITIES = {
   "Хургада": ["Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar", "Эль-Ахья"],
@@ -179,6 +183,57 @@ function isSubscribed(user) {
   return Boolean(user && !user.isGuest && user.subscriptionActive);
 }
 
+function subscriptionIsActive(subscription) {
+  if (!subscription || !["trial", "active"].includes(subscription.status)) return false;
+  return !subscription.ends_at || new Date(subscription.ends_at).getTime() > Date.now();
+}
+
+function formatEventDate(value) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function mapDatabaseEvent(event) {
+  const typeNames = { general: "Афиша", sport: "Спорт", kids: "Для детей" };
+  return {
+    id: event.id,
+    title: event.title,
+    type: typeNames[event.event_type] || "Афиша",
+    sport: event.sport,
+    age: event.age_limit == null ? null : `${event.age_limit}+`,
+    area: event.area,
+    location: event.location_name,
+    mapUrl: event.map_url,
+    date: formatEventDate(event.starts_at),
+    text: event.description,
+    request: event.request_enabled,
+  };
+}
+
+async function loadSupabaseUser(authUser) {
+  const [{ data: profile, error: profileError }, { data: subscription, error: subscriptionError }] = await Promise.all([
+    supabaseClient.from("profiles").select("id, display_name, role, city, search_area").eq("id", authUser.id).single(),
+    supabaseClient.from("subscriptions").select("status, starts_at, ends_at, auto_renew, plan_code").eq("user_id", authUser.id).maybeSingle(),
+  ]);
+  if (profileError) throw profileError;
+  if (subscriptionError) throw subscriptionError;
+  return {
+    id: profile.id,
+    email: authUser.email,
+    role: profile.role,
+    name: profile.display_name,
+    city: profile.city,
+    searchArea: profile.search_area || "Marina",
+    subscription,
+    subscriptionActive: subscriptionIsActive(subscription),
+  };
+}
+
 function Header({ user, onHome, onLogout }) {
   return (
     <header className="topbar">
@@ -206,7 +261,7 @@ function Header({ user, onHome, onLogout }) {
             </button>
           </>
         ) : (
-          <span className="role-pill">Демо: client@hurma.local / 123456</span>
+          <span className="role-pill">Supabase подключен</span>
         )}
       </div>
     </header>
@@ -277,13 +332,17 @@ function AuthForm({ mode, setMode, onBack, onSubmit }) {
   const [city, setCity] = useState("Хургада");
   const [searchArea, setSearchArea] = useState("Marina");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     setSearchArea(areaOptions(city)[0]);
   }, [city]);
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
+    setError("");
+    setInfo("");
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email") || "").trim().toLowerCase();
     const password = String(form.get("password") || "").trim();
@@ -291,16 +350,23 @@ function AuthForm({ mode, setMode, onBack, onSubmit }) {
       setError("Пароль должен быть не короче 6 символов.");
       return;
     }
-    onSubmit({
-      mode,
-      role,
-      name: String(form.get("name") || "Демо клиент").trim(),
-      email,
-      password,
-      city,
-      searchArea,
-      category: String(form.get("category") || "Трансфер"),
-    });
+    setPending(true);
+    try {
+      const result = await onSubmit({
+        mode,
+        role,
+        name: String(form.get("name") || "Пользователь").trim(),
+        email,
+        password,
+        city,
+        searchArea,
+        category: String(form.get("category") || "Трансфер"),
+      });
+      if (result && result.error) setError(result.error);
+      if (result && result.info) setInfo(result.info);
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -355,15 +421,16 @@ function AuthForm({ mode, setMode, onBack, onSubmit }) {
           ) : null}
           <label className="field">
             <span>Email</span>
-            <input name="email" type="email" placeholder="you@example.com" defaultValue={mode === "login" ? "client@hurma.local" : ""} required />
+            <input name="email" type="email" placeholder="you@example.com" required />
           </label>
           <label className="field">
             <span>Пароль</span>
-            <input name="password" type="password" placeholder="Минимум 6 символов" defaultValue={mode === "login" ? "123456" : ""} required />
+            <input name="password" type="password" placeholder="Минимум 6 символов" required />
           </label>
           <div className="error">{error}</div>
-          <button className="primary" type="submit">
-            {mode === "login" ? "Войти" : "Зарегистрироваться"}
+          {info ? <div className="form-info">{info}</div> : null}
+          <button className="primary" type="submit" disabled={pending}>
+            {pending ? "Подождите..." : mode === "login" ? "Войти" : "Зарегистрироваться"}
           </button>
           <button className="secondary" type="button" onClick={() => onSubmit({ mode: "guest" })}>
             Продолжить без регистрации
@@ -400,7 +467,7 @@ function Nav({ view, setView, user }) {
   );
 }
 
-function Workspace({ user, setUser, onRequireSubscription }) {
+function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading, eventsError }) {
   const [view, setView] = useState("services");
   const [service, setService] = useState("");
   const [chatId, setChatId] = useState("");
@@ -426,7 +493,7 @@ function Workspace({ user, setUser, onRequireSubscription }) {
     <section className="workspace">
       <Nav view={view} setView={setView} user={user} />
       <section className="content">
-        {view === "services" ? <Services user={user} service={service} setService={setService} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} /> : null}
+        {view === "services" ? <Services user={user} service={service} setService={setService} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} /> : null}
         {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} /> : null}
       </section>
@@ -434,7 +501,7 @@ function Workspace({ user, setUser, onRequireSubscription }) {
   );
 }
 
-function Services({ user, service, setService, onRequireSubscription, onStartChat }) {
+function Services({ user, service, setService, onRequireSubscription, onStartChat, events, eventsLoading, eventsError }) {
   if (!service) {
     return (
       <div className="service-tabs">
@@ -457,7 +524,7 @@ function Services({ user, service, setService, onRequireSubscription, onStartCha
           Все сервисы
         </button>
       </div>
-      {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} /> : <ExecutorList service={service} user={user} onStartChat={onStartChat} />}
+      {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} sourceEvents={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : <ExecutorList service={service} user={user} onStartChat={onStartChat} />}
     </>
   );
 }
@@ -497,10 +564,30 @@ function ExecutorList({ service, user, onStartChat }) {
   );
 }
 
-function Afisha({ user, onRequireSubscription }) {
+function Afisha({ user, onRequireSubscription, sourceEvents, eventsLoading, eventsError }) {
   const [filters, setFilters] = useState({ area: "Все районы", type: "Все мероприятия", sport: "Все виды спорта", age: "Любой возраст", q: "" });
+  const [requestedIds, setRequestedIds] = useState([]);
+  const [requestError, setRequestError] = useState("");
+
+  useEffect(() => {
+    if (!supabaseClient || !user || user.isGuest) return;
+    let active = true;
+    supabaseClient
+      .from("requests")
+      .select("event_id")
+      .eq("client_id", user.id)
+      .not("event_id", "is", null)
+      .then(({ data, error }) => {
+        if (!active || error) return;
+        setRequestedIds(data.map((item) => item.event_id));
+      });
+    return () => {
+      active = false;
+    };
+  }, [user && user.id]);
+
   const events = useMemo(() => {
-    return EVENTS.filter((event) => {
+    return sourceEvents.filter((event) => {
       const areaOk = filters.area === "Все районы" || event.area === filters.area;
       const typeOk = filters.type === "Все мероприятия" || event.type === filters.type;
       const sportOk = filters.type !== "Спорт" || filters.sport === "Все виды спорта" || event.sport === filters.sport;
@@ -508,8 +595,26 @@ function Afisha({ user, onRequireSubscription }) {
       const query = `${event.title} ${event.text} ${event.location} ${event.area} ${event.sport || ""}`.toLowerCase();
       return areaOk && typeOk && sportOk && ageOk && query.includes(filters.q.toLowerCase());
     });
-  }, [filters]);
+  }, [filters, sourceEvents]);
   const update = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  const requestEvent = async (eventId) => {
+    setRequestError("");
+    if (!isSubscribed(user)) {
+      onRequireSubscription();
+      return;
+    }
+    const { error } = await supabaseClient.from("requests").insert({
+      client_id: user.id,
+      event_id: eventId,
+      comment: "",
+      status: "new",
+    });
+    if (error) {
+      setRequestError(error.message);
+      return;
+    }
+    setRequestedIds((current) => current.includes(eventId) ? current : [...current, eventId]);
+  };
   return (
     <>
       <div className="panel event-filters event-filters-dynamic">
@@ -531,6 +636,9 @@ function Afisha({ user, onRequireSubscription }) {
           </select>
         ) : null}
       </div>
+      {eventsLoading ? <div className="panel empty-state">Загружаем афишу...</div> : null}
+      {eventsError ? <div className="panel error-state">{eventsError}</div> : null}
+      {requestError ? <div className="panel error-state">{requestError}</div> : null}
       <div className="event-grid">
         {events.map((event) => (
           <article className="event-card" key={event.id}>
@@ -539,11 +647,11 @@ function Afisha({ user, onRequireSubscription }) {
             <p>{event.date}</p>
             <p>{event.text}</p>
             <div className="meta"><span>{event.area}</span><span>{event.location}</span></div>
-            <div className="quick-actions">
+            <div className="quick-actions event-actions">
               <a className="secondary" href={event.mapUrl} target="_blank" rel="noreferrer">Место проведения</a>
               {event.request ? (
-                <button className="primary" type="button" onClick={() => (isSubscribed(user) ? null : onRequireSubscription())}>
-                  Оставить заявку
+                <button className="primary" type="button" disabled={requestedIds.includes(event.id)} onClick={() => requestEvent(event.id)}>
+                  {requestedIds.includes(event.id) ? "Заявка отправлена" : "Оставить заявку"}
                 </button>
               ) : null}
             </div>
@@ -626,8 +734,17 @@ function Profile({ user, setUser }) {
       return next;
     });
   }
-  function save(event) {
+  async function save(event) {
     event.preventDefault();
+    const { error } = await supabaseClient
+      .from("profiles")
+      .update({
+        display_name: draft.name,
+        city: draft.city,
+        search_area: draft.searchArea,
+      })
+      .eq("id", user.id);
+    if (error) return;
     setUser(draft);
     setLocked(true);
   }
@@ -659,7 +776,7 @@ function SubscriptionModal({ onClose, onRegister }) {
       <section className="subscription-modal" role="dialog" aria-modal="true">
         <span className="tag">Подписка ХурМа</span>
         <h2>Оформите подписку</h2>
-        <p>Переписка и заявки доступны после регистрации и активной подписки. В прототипе зарегистрированный пользователь получает доступ сразу.</p>
+        <p>Переписка и заявки доступны после регистрации и активной подписки. Новому пользователю предоставляется тестовый период на 14 дней.</p>
         <div className="quick-actions">
           <button className="primary" type="button" onClick={onRegister}>Зарегистрироваться</button>
           <button className="secondary" type="button" onClick={onClose}>Позже</button>
@@ -674,18 +791,85 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [authMode, setAuthMode] = useState("choice");
   const [formMode, setFormMode] = useState("register");
-  const [user, setUserState] = useState(saved.user || null);
+  const [user, setUserState] = useState(saved.user && saved.user.isGuest ? saved.user : null);
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState("");
   const [modal, setModal] = useState(false);
   const [appKey, setAppKey] = useState(0);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1800);
-    return () => clearTimeout(timer);
+    let active = true;
+    async function initialize() {
+      const delay = new Promise((resolve) => setTimeout(resolve, 1800));
+      try {
+        if (supabaseClient) {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          if (session && active) {
+            setUserState(await loadSupabaseUser(session.user));
+          }
+        }
+      } catch (error) {
+        console.error("Supabase session error", error);
+      }
+      await delay;
+      if (active) setLoading(false);
+    }
+    initialize();
+
+    const authListener = supabaseClient
+      ? supabaseClient.auth.onAuthStateChange((event, session) => {
+          if (event === "SIGNED_OUT" && active) setUserState(null);
+          if (event === "SIGNED_IN" && session && active) {
+            setTimeout(async () => {
+              try {
+                if (active) setUserState(await loadSupabaseUser(session.user));
+              } catch (error) {
+                console.error("Supabase profile error", error);
+              }
+            }, 0);
+          }
+        })
+      : null;
+
+    return () => {
+      active = false;
+      authListener?.data?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadEvents() {
+      if (!supabaseClient) {
+        setEvents(EVENTS);
+        setEventsError("Подключение к Supabase не настроено.");
+        setEventsLoading(false);
+        return;
+      }
+      const { data, error } = await supabaseClient
+        .from("events")
+        .select("id, title, description, event_type, sport, age_limit, area, location_name, map_url, starts_at, request_enabled")
+        .eq("is_published", true)
+        .order("starts_at");
+      if (!active) return;
+      if (error) {
+        setEvents(EVENTS);
+        setEventsError("Не удалось загрузить афишу из базы. Показаны тестовые данные.");
+      } else {
+        setEvents(data.map(mapDatabaseEvent));
+      }
+      setEventsLoading(false);
+    }
+    loadEvents();
+    return () => {
+      active = false;
+    };
   }, []);
 
   function setUser(nextUser) {
     setUserState(nextUser);
-    saveSaved({ user: nextUser });
+    saveSaved({ user: nextUser && nextUser.isGuest ? nextUser : null });
   }
 
   function home() {
@@ -697,22 +881,63 @@ function App() {
     setAppKey((key) => key + 1);
   }
 
-  function logout() {
-    setUser(null);
+  async function logout() {
+    if (supabaseClient && user && !user.isGuest) await supabaseClient.auth.signOut();
+    setUserState(null);
+    saveSaved({ user: null });
     setAuthMode("choice");
     setAppKey((key) => key + 1);
   }
 
-  function authSubmit(data) {
+  async function authSubmit(data) {
     if (data.mode === "guest") {
       setUser({ id: "guest", role: "client", name: "Гость ХурМа", city: "Хургада", searchArea: "Marina", isGuest: true });
-      return;
+      return { ok: true };
     }
+    if (!supabaseClient) return { error: "Supabase не подключен." };
     if (data.mode === "login") {
-      setUser({ id: "client-demo", role: data.role, name: data.role === "executor" ? "Демо исполнитель" : "Демо клиент", city: "Хургада", searchArea: "Marina", subscriptionActive: true, category: "Трансфер" });
-      return;
+      const { data: authData, error } = await supabaseClient.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
+      if (error) return { error: error.message };
+      try {
+        const nextUser = await loadSupabaseUser(authData.user);
+        if (nextUser.role !== data.role) {
+          await supabaseClient.auth.signOut();
+          return { error: "Для этого аккаунта выбрана другая роль." };
+        }
+        setUserState(nextUser);
+        saveSaved({ user: null });
+      } catch (profileError) {
+        return { error: profileError.message };
+      }
+      return { ok: true };
     }
-    setUser({ id: Date.now().toString(), role: data.role, name: data.name, email: data.email, city: data.city, searchArea: data.searchArea, subscriptionActive: true, category: data.category });
+    const { data: authData, error } = await supabaseClient.auth.signUp({
+      email: data.email,
+      password: data.password,
+      options: {
+        data: {
+          display_name: data.name,
+          role: data.role,
+          city: data.city,
+          search_area: data.searchArea,
+          category: data.category,
+        },
+      },
+    });
+    if (error) return { error: error.message };
+    if (!authData.session) {
+      return { info: "Регистрация создана. Подтвердите email по ссылке в письме, затем выполните вход." };
+    }
+    try {
+      setUserState(await loadSupabaseUser(authData.user));
+      saveSaved({ user: null });
+    } catch (profileError) {
+      return { error: profileError.message };
+    }
+    return { ok: true };
   }
 
   if (loading) return <LoadingScreen />;
@@ -725,7 +950,7 @@ function App() {
           <AuthChoice onLogin={() => { setFormMode("login"); setAuthMode("form"); }} onRegister={() => { setFormMode("register"); setAuthMode("form"); }} onGuest={() => authSubmit({ mode: "guest" })} />
         ) : null}
         {!user && authMode === "form" ? <AuthForm mode={formMode} setMode={setFormMode} onBack={() => setAuthMode("choice")} onSubmit={authSubmit} /> : null}
-        {user ? <Workspace user={user} setUser={setUser} onRequireSubscription={() => setModal(true)} /> : null}
+        {user ? <Workspace user={user} setUser={setUser} onRequireSubscription={() => setModal(true)} events={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : null}
       </main>
       {modal ? <SubscriptionModal onClose={() => setModal(false)} onRegister={() => { setModal(false); setUser(null); setAuthMode("form"); setFormMode("register"); }} /> : null}
     </div>
