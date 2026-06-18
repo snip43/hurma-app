@@ -1,0 +1,782 @@
+﻿<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>&#1061;&#1091;&#1088;&#1052;&#1072;</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230b8f8b'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-family='Arial,sans-serif' font-size='34' font-weight='800' fill='white'%3E%D0%A5%3C/text%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css?v=20260617-react" />
+  </head>
+  <body>
+    <div id="app">
+      <div class="loading-screen">
+        <div class="loading-backdrop"></div>
+        <div class="loading-card" aria-label="&#1061;&#1091;&#1088;&#1052;&#1072; &#1079;&#1072;&#1075;&#1088;&#1091;&#1078;&#1072;&#1077;&#1090;&#1089;&#1103;">
+          <div class="loading-sky" aria-hidden="true">
+            <div class="celestial sun"></div>
+            <div class="celestial moon"></div>
+          </div>
+          <div class="loading-logo">&#1061;&#1091;&#1088;&#1052;&#1072;</div>
+          <div class="loading-line"></div>
+          <div class="loading-caption">&#1057;&#1086;&#1083;&#1085;&#1094;&#1077; &#1061;&#1091;&#1088;&#1075;&#1072;&#1076;&#1099; &#1080; &#1084;&#1086;&#1088;&#1077; &#1079;&#1072;&#1076;&#1072;&#1095;</div>
+        </div>
+      </div>
+    </div>
+    <noscript>
+      <div class="app-shell">
+        <main class="main">
+          <div class="panel empty-state">
+            <div>
+              <strong>&#1042;&#1082;&#1083;&#1102;&#1095;&#1080;&#1090;&#1077; JavaScript</strong>
+              <span>&#1055;&#1088;&#1080;&#1083;&#1086;&#1078;&#1077;&#1085;&#1080;&#1077; &#1061;&#1091;&#1088;&#1052;&#1072; &#1088;&#1072;&#1073;&#1086;&#1090;&#1072;&#1077;&#1090; &#1074; &#1073;&#1088;&#1072;&#1091;&#1079;&#1077;&#1088;&#1077; &#1089; JavaScript.</span>
+            </div>
+          </div>
+        </main>  
+      </div>
+    </noscript>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"></script>
+    <script type="text/babel" data-presets="react">
+const { useEffect, useMemo, useState } = React;
+
+const STORAGE_KEY = "hurma-react-state-v1";
+
+const CITIES = {
+  "Хургада": ["Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar", "Эль-Ахья"],
+  "Шарм-эль-Шейх": ["Naama Bay", "Hadaba", "Sharks Bay", "Nabq Bay", "Old Market", "SOHO Square"],
+};
+
+const AREA_FILTERS = ["Все районы", ...CITIES["Хургада"]];
+const SERVICES = ["Трансфер", "Клининг", "Афиша"];
+const EVENT_TYPES = ["Все мероприятия", "Афиша", "Спорт", "Для детей"];
+const SPORTS = ["Все виды спорта", "Футбол", "Йога", "Дайвинг", "Бег", "Падел", "Волейбол", "Баскетбол"];
+const AGES = ["Любой возраст", "0+", "6+", "12+", "16+"];
+
+const EXECUTORS = [
+  {
+    id: "transfer-1",
+    name: "Ахмед Саид",
+    city: "Хургада",
+    area: "Marina",
+    category: "Трансфер",
+    title: "Трансфер из аэропорта и поездки по городу",
+    price: "от 12 $",
+    rating: 4.9,
+    about: "Встречаю в аэропорту, помогаю с багажом, поездки по Хургаде, Эль-Гуне и Сахль-Хашиш.",
+    skills: ["аэропорт", "детское кресло", "русский язык"],
+  },
+  {
+    id: "transfer-2",
+    name: "Карим Махмуд",
+    city: "Хургада",
+    area: "Эль-Ахья",
+    category: "Трансфер",
+    title: "Семейные поездки и междугородний трансфер",
+    price: "от 18 $",
+    rating: 4.8,
+    about: "Комфортный минивэн, поездки в Каир, Луксор, Эль-Гуну и аэропорт.",
+    skills: ["минивэн", "семьи", "межгород"],
+  },
+  {
+    id: "clean-1",
+    name: "Sara Cleaning",
+    city: "Хургада",
+    area: "Mamsha",
+    category: "Клининг",
+    title: "Уборка квартир и апартаментов",
+    price: "от 20 $",
+    rating: 4.95,
+    about: "Регулярная уборка, генеральная уборка после гостей, подготовка квартиры к заселению.",
+    skills: ["апартаменты", "после гостей", "окна"],
+  },
+  {
+    id: "clean-2",
+    name: "Nour Home Care",
+    city: "Хургада",
+    area: "Sheraton",
+    category: "Клининг",
+    title: "Клининг вилл и больших квартир",
+    price: "от 35 $",
+    rating: 4.7,
+    about: "Команда для больших объектов, уборка после ремонта, поддерживающая уборка.",
+    skills: ["виллы", "после ремонта", "команда"],
+  },
+];
+
+const EVENTS = [
+  {
+    id: "event-1",
+    title: "Вечерняя прогулка по Marina Hurghada",
+    date: "Сегодня, 19:30",
+    area: "Marina",
+    type: "Афиша",
+    location: "Hurghada Marina",
+    mapUrl: "https://www.google.com/maps/search/?api=1&query=Hurghada%20Marina",
+    text: "Набережная, кафе, закат и спокойный маршрут для первого знакомства с городом.",
+    request: false,
+  },
+  {
+    id: "event-2",
+    title: "Снорклинг на островах",
+    date: "Завтра, 09:00",
+    area: "Marina",
+    type: "Афиша",
+    location: "New Marina Hurghada",
+    mapUrl: "https://www.google.com/maps/search/?api=1&query=New%20Marina%20Hurghada",
+    text: "Морская программа на день: трансфер, лодка, остановки у рифов и отдых на пляже.",
+    request: true,
+  },
+  {
+    id: "event-3",
+    title: "Семейная афиша на выходные",
+    date: "Суббота, 17:00",
+    area: "Mamsha",
+    type: "Для детей",
+    age: "6+",
+    location: "Hurghada Mamsha Promenade",
+    mapUrl: "https://www.google.com/maps/search/?api=1&query=Hurghada%20Mamsha%20Promenade",
+    text: "Подборка мест для детей и взрослых: шоу, прогулки, рестораны и спокойные локации.",
+    request: false,
+  },
+  {
+    id: "event-4",
+    title: "Утренняя йога у моря",
+    date: "Пятница, 07:30",
+    area: "Sahl Hasheesh",
+    type: "Спорт",
+    sport: "Йога",
+    location: "Sahl Hasheesh Old Town",
+    mapUrl: "https://www.google.com/maps/search/?api=1&query=Sahl%20Hasheesh%20Old%20Town",
+    text: "Легкая тренировка на рассвете, дыхание, растяжка и спокойный темп.",
+    request: true,
+  },
+  {
+    id: "event-5",
+    title: "Волейбол на пляже",
+    date: "Среда, 18:30",
+    area: "Эль-Ахья",
+    type: "Спорт",
+    sport: "Волейбол",
+    location: "El Ahyaa Beach",
+    mapUrl: "https://www.google.com/maps/search/?api=1&query=El%20Ahyaa%20Beach%20Hurghada",
+    text: "Открытая игра для жителей района, команды собираются на месте.",
+    request: true,
+  },
+  {
+    id: "event-6",
+    title: "Баскетбол 3x3",
+    date: "Четверг, 20:00",
+    area: "Dahar",
+    type: "Спорт",
+    sport: "Баскетбол",
+    location: "Dahar Sports Court",
+    mapUrl: "https://www.google.com/maps/search/?api=1&query=Dahar%20Hurghada%20basketball",
+    text: "Вечерняя игра 3x3, можно прийти одному или своей командой.",
+    request: true,
+  },
+];
+
+const COMMUNITY_CHATS = [
+  {
+    id: "tiba",
+    title: "Чат дома Tiba Royal / Paradise",
+    subtitle: "Общий чат жильцов",
+    readonly: false,
+    messages: [
+      { from: "Сосед", text: "Кто сегодня едет в Senzo Mall?", time: "10:12", me: false },
+      { from: "Вы", text: "Я ближе к вечеру, могу захватить пару пакетов.", time: "10:18", me: true },
+    ],
+  },
+  {
+    id: "news",
+    title: "Новости NEW HOUSE",
+    subtitle: "Объявления и новости дома",
+    readonly: true,
+    messages: [
+      { from: "Администрация", text: "Завтра плановая проверка бассейна с 9:00 до 12:00.", time: "09:00", me: false },
+    ],
+  },
+];
+
+function loadSaved() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSaved(state) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function areaOptions(city) {
+  return CITIES[city] || CITIES["Хургада"];
+}
+
+function isSubscribed(user) {
+  return Boolean(user && !user.isGuest && user.subscriptionActive);
+}
+
+function Header({ user, onHome, onLogout }) {
+  return (
+    <header className="topbar">
+      <button className="brand brand-home" type="button" onClick={onHome} aria-label="На главную">
+        <div className="brand-mark">Х</div>
+        <div>
+          <h1 className="brand-title">ХурМа</h1>
+          <p className="brand-subtitle">сервисы для жизни в Хургаде</p>
+        </div>
+      </button>
+      <div className="user-tools">
+        {user && !user.isGuest && user.searchArea ? (
+          <span className="location-pill location-pill-static">
+            <span>Район поиска</span>
+            <strong>{user.searchArea}</strong>
+          </span>
+        ) : null}
+        {user ? (
+          <>
+            <span className="role-pill">
+              {user.role === "executor" ? "Исполнитель" : user.isGuest ? "Гость" : "Клиент"} · {user.name}
+            </span>
+            <button className="secondary" type="button" onClick={onLogout}>
+              Выйти
+            </button>
+          </>
+        ) : (
+          <span className="role-pill">Демо: client@hurma.local / 123456</span>
+        )}
+      </div>
+    </header>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <div className="loading-screen">
+      <div className="loading-backdrop" />
+      <div className="loading-card" aria-label="ХурМа загружается">
+        <div className="loading-sky" aria-hidden="true">
+          <div className="celestial sun" />
+          <div className="celestial moon" />
+        </div>
+        <div className="loading-logo">ХурМа</div>
+        <div className="loading-line" />
+        <div className="loading-caption">Солнце Хургады и море задач</div>
+      </div>
+    </div>
+  );
+}
+
+function AuthChoice({ onLogin, onRegister, onGuest }) {
+  return (
+    <section className="auth-layout">
+      <div className="intro">
+        <div>
+          <h1>
+            <span className="hero-brand-word">ХурМа</span> для солнечной Хургады
+          </h1>
+          <p>Выберите сервис, найдите исполнителя, посмотрите афишу и начните общение после регистрации.</p>
+        </div>
+        <div className="intro-stats">
+          <div className="stat">
+            <strong>3 сервиса</strong>
+            <span>трансфер, клининг и афиша рядом</span>
+          </div>
+          <div className="stat">
+            <strong>чат</strong>
+            <span>диалог с исполнителем после подписки</span>
+          </div>
+          <div className="stat">
+            <strong>Хургада</strong>
+            <span>локальные услуги для жителей и гостей</span>
+          </div>
+        </div>
+      </div>
+      <div className="panel auth-panel auth-choice-panel">
+        <div className="auth-choice-actions">
+          <button className="primary" type="button" data-hint="Откроется форма входа для зарегистрированных пользователей." onClick={onLogin}>
+            Вход
+          </button>
+          <button className="primary" type="button" data-hint="Создайте аккаунт, выберите роль и район поиска." onClick={onRegister}>
+            Регистрация
+          </button>
+          <button className="secondary" type="button" data-hint="Можно посмотреть сервисы и афишу без аккаунта. Для заявок понадобится подписка." onClick={onGuest}>
+            Продолжить без регистрации
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AuthForm({ mode, setMode, onBack, onSubmit }) {
+  const [role, setRole] = useState("client");
+  const [city, setCity] = useState("Хургада");
+  const [searchArea, setSearchArea] = useState("Marina");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setSearchArea(areaOptions(city)[0]);
+  }, [city]);
+
+  function submit(event) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get("email") || "").trim().toLowerCase();
+    const password = String(form.get("password") || "").trim();
+    if (password.length < 6) {
+      setError("Пароль должен быть не короче 6 символов.");
+      return;
+    }
+    onSubmit({
+      mode,
+      role,
+      name: String(form.get("name") || "Демо клиент").trim(),
+      email,
+      password,
+      city,
+      searchArea,
+      category: String(form.get("category") || "Трансфер"),
+    });
+  }
+
+  return (
+    <section className="auth-layout auth-layout-form">
+      <div className="panel auth-panel">
+        <button className="ghost auth-back-button" type="button" onClick={onBack}>
+          Назад
+        </button>
+        <h2 className="section-title">{mode === "login" ? "Войти в ХурМа" : "Создать аккаунт"}</h2>
+        <p className="section-note">{mode === "login" ? "Выберите роль и войдите в свой кабинет." : "Зарегистрируйтесь или посмотрите сервисы без аккаунта."}</p>
+        <form className="form" onSubmit={submit}>
+          <div className="role-toggle">
+            <button type="button" className={`toggle-option ${role === "client" ? "active" : ""}`} onClick={() => setRole("client")}>
+              Клиент
+            </button>
+            <button type="button" className={`toggle-option ${role === "executor" ? "active" : ""}`} onClick={() => setRole("executor")}>
+              Исполнитель
+            </button>
+          </div>
+          {mode === "register" ? (
+            <>
+              <label className="field">
+                <span>Имя</span>
+                <input name="name" placeholder="Например, Ольга Иванова" required />
+              </label>
+              <label className="field">
+                <span>Город</span>
+                <select name="city" value={city} onChange={(event) => setCity(event.target.value)} required>
+                  {Object.keys(CITIES).map((item) => (
+                    <option key={item}>{item}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Район поиска</span>
+                <select name="searchArea" value={searchArea} onChange={(event) => setSearchArea(event.target.value)} required>
+                  {areaOptions(city).map((area) => (
+                    <option key={area}>{area}</option>
+                  ))}
+                </select>
+              </label>
+              {role === "executor" ? (
+                <label className="field">
+                  <span>Сервис</span>
+                  <select name="category">
+                    <option>Трансфер</option>
+                    <option>Клининг</option>
+                  </select>
+                </label>
+              ) : null}
+            </>
+          ) : null}
+          <label className="field">
+            <span>Email</span>
+            <input name="email" type="email" placeholder="you@example.com" defaultValue={mode === "login" ? "client@hurma.local" : ""} required />
+          </label>
+          <label className="field">
+            <span>Пароль</span>
+            <input name="password" type="password" placeholder="Минимум 6 символов" defaultValue={mode === "login" ? "123456" : ""} required />
+          </label>
+          <div className="error">{error}</div>
+          <button className="primary" type="submit">
+            {mode === "login" ? "Войти" : "Зарегистрироваться"}
+          </button>
+          <button className="secondary" type="button" onClick={() => onSubmit({ mode: "guest" })}>
+            Продолжить без регистрации
+          </button>
+          <div className="auth-form-switch">
+            <span>{mode === "login" ? "Еще нет аккаунта?" : "Уже есть аккаунт?"}</span>
+            <button className="ghost auth-link-button" type="button" onClick={() => setMode(mode === "login" ? "register" : "login")}>
+              {mode === "login" ? "Зарегистрироваться" : "Войти"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+function Nav({ view, setView, user }) {
+  return (
+    <aside className="panel sidebar">
+      <nav className="nav">
+        <button className={view === "services" ? "active" : ""} onClick={() => setView("services")}>
+          Сервисы
+        </button>
+        <button className={view === "messages" ? "active" : ""} onClick={() => setView("messages")}>
+          Чат
+        </button>
+        {!user.isGuest ? (
+          <button className={view === "profile" ? "active" : ""} onClick={() => setView("profile")}>
+            Профиль
+          </button>
+        ) : null}
+      </nav>
+    </aside>
+  );
+}
+
+function Workspace({ user, setUser, onRequireSubscription }) {
+  const [view, setView] = useState("services");
+  const [service, setService] = useState("");
+  const [chatId, setChatId] = useState("");
+
+  function goHome() {
+    setView("services");
+    setService("");
+    setChatId("");
+  }
+
+  function startExecutorChat(executor) {
+    if (!isSubscribed(user)) {
+      onRequireSubscription();
+      return;
+    }
+    setChatId(`executor:${executor.id}`);
+    setView("messages");
+  }
+
+  window.hurmaGoHome = goHome;
+
+  return (
+    <section className="workspace">
+      <Nav view={view} setView={setView} user={user} />
+      <section className="content">
+        {view === "services" ? <Services user={user} service={service} setService={setService} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} /> : null}
+        {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} /> : null}
+        {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} /> : null}
+      </section>
+    </section>
+  );
+}
+
+function Services({ user, service, setService, onRequireSubscription, onStartChat }) {
+  if (!service) {
+    return (
+      <div className="service-tabs">
+        {SERVICES.map((item) => (
+          <button key={item} className="service-tab-card" type="button" onClick={() => setService(item)}>
+            <strong>{item}</strong>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="service-tabs service-tabs-compact">
+        <button className="service-tab-card active" type="button">
+          {service}
+        </button>
+        <button className="service-tabs-reset" type="button" onClick={() => setService("")}>
+          Все сервисы
+        </button>
+      </div>
+      {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} /> : <ExecutorList service={service} user={user} onStartChat={onStartChat} />}
+    </>
+  );
+}
+
+function ExecutorList({ service, user, onStartChat }) {
+  const [q, setQ] = useState("");
+  const items = EXECUTORS.filter((executor) => executor.category === service && `${executor.name} ${executor.title} ${executor.area}`.toLowerCase().includes(q.toLowerCase()));
+  return (
+    <>
+      <div className="panel searchbar">
+        <input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Поиск исполнителя" />
+      </div>
+      <div className="cards-grid">
+        {items.map((executor) => (
+          <article className="executor-card" key={executor.id}>
+            <div className="executor-top">
+              <div className="avatar">{executor.name.slice(0, 1)}</div>
+              <div>
+                <h3>{executor.name}</h3>
+                <span>{executor.city} · {executor.area}</span>
+              </div>
+              <strong>{executor.rating}</strong>
+            </div>
+            <p><strong>{executor.title}</strong></p>
+            <p>{executor.about}</p>
+            <div className="meta">{executor.skills.map((skill) => <span className="tag" key={skill}>{skill}</span>)}</div>
+            <div className="executor-footer">
+              <span className="price">{executor.price}</span>
+              <button className="primary" type="button" onClick={() => onStartChat(executor)}>
+                Написать
+              </button>
+            </div>
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function Afisha({ user, onRequireSubscription }) {
+  const [filters, setFilters] = useState({ area: "Все районы", type: "Все мероприятия", sport: "Все виды спорта", age: "Любой возраст", q: "" });
+  const events = useMemo(() => {
+    return EVENTS.filter((event) => {
+      const areaOk = filters.area === "Все районы" || event.area === filters.area;
+      const typeOk = filters.type === "Все мероприятия" || event.type === filters.type;
+      const sportOk = filters.type !== "Спорт" || filters.sport === "Все виды спорта" || event.sport === filters.sport;
+      const ageOk = filters.type !== "Для детей" || filters.age === "Любой возраст" || event.age === filters.age;
+      const query = `${event.title} ${event.text} ${event.location} ${event.area} ${event.sport || ""}`.toLowerCase();
+      return areaOk && typeOk && sportOk && ageOk && query.includes(filters.q.toLowerCase());
+    });
+  }, [filters]);
+  const update = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  return (
+    <>
+      <div className="panel event-filters event-filters-dynamic">
+        <input value={filters.q} onChange={(event) => update("q", event.target.value)} placeholder="Поиск по афише" />
+        <select value={filters.area} onChange={(event) => update("area", event.target.value)}>
+          {AREA_FILTERS.map((area) => <option key={area}>{area}</option>)}
+        </select>
+        <select value={filters.type} onChange={(event) => update("type", event.target.value)}>
+          {EVENT_TYPES.map((type) => <option key={type}>{type}</option>)}
+        </select>
+        {filters.type === "Спорт" ? (
+          <select value={filters.sport} onChange={(event) => update("sport", event.target.value)}>
+            {SPORTS.map((sport) => <option key={sport}>{sport}</option>)}
+          </select>
+        ) : null}
+        {filters.type === "Для детей" ? (
+          <select value={filters.age} onChange={(event) => update("age", event.target.value)}>
+            {AGES.map((age) => <option key={age}>{age}</option>)}
+          </select>
+        ) : null}
+      </div>
+      <div className="event-grid">
+        {events.map((event) => (
+          <article className="event-card" key={event.id}>
+            <span className="tag">{event.type}{event.sport ? ` · ${event.sport}` : ""}</span>
+            <h3>{event.title}</h3>
+            <p>{event.date}</p>
+            <p>{event.text}</p>
+            <div className="meta"><span>{event.area}</span><span>{event.location}</span></div>
+            <div className="quick-actions">
+              <a className="secondary" href={event.mapUrl} target="_blank" rel="noreferrer">Место проведения</a>
+              {event.request ? (
+                <button className="primary" type="button" onClick={() => (isSubscribed(user) ? null : onRequireSubscription())}>
+                  Оставить заявку
+                </button>
+              ) : null}
+            </div>
+          </article>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function Messages({ chatId, setChatId, user }) {
+  const executorId = chatId.startsWith("executor:") ? chatId.replace("executor:", "") : "";
+  const executor = EXECUTORS.find((item) => item.id === executorId);
+  const executorChat = executor ? {
+    id: chatId,
+    title: executor.name,
+    subtitle: executor.title,
+    readonly: false,
+    messages: [
+      { from: executor.name, text: "Здравствуйте! Напишите, что нужно сделать и на какое время.", time: "сейчас", me: false },
+    ],
+  } : null;
+  const chat = executorChat || COMMUNITY_CHATS.find((item) => item.id === chatId);
+  if (!chatId) {
+    return (
+      <div className="wa-shell wa-list-only">
+        <div className="wa-sidebar wa-sidebar-full">
+          <div className="wa-sidebar-head">
+            <h2>ХурМа</h2>
+          </div>
+          <div className="wa-search">Поиск или новый чат</div>
+          <div className="wa-dialogs">
+            {COMMUNITY_CHATS.map((item) => (
+              <button className="wa-dialog" key={item.id} type="button" onClick={() => setChatId(item.id)}>
+                <div className="wa-avatar">{item.title.slice(0, 1)}</div>
+                <div className="wa-dialog-main">
+                  <div className="wa-dialog-row">
+                    <strong>{item.title}</strong>
+                  </div>
+                  <span className="wa-dialog-preview">{item.subtitle}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="wa-shell wa-chat-only">
+      <section className="wa-chat">
+        <div className="wa-chat-head">
+          <button className="wa-mobile-back" type="button" onClick={() => setChatId("")}>←</button>
+          <div className="wa-avatar">{chat.title.slice(0, 1)}</div>
+          <div className="wa-chat-title"><strong>{chat.title}</strong><span>{chat.subtitle}</span></div>
+        </div>
+        <div className="wa-messages">
+          {chat.messages.map((message, index) => (
+            <div className={`wa-bubble ${message.me ? "mine" : ""}`} key={index}>
+              <span>{message.text}</span>
+              <small>{message.time}</small>
+            </div>
+          ))}
+        </div>
+        {chat.readonly ? <div className="wa-readonly">Это новостной канал. Сообщения публикуются как объявления.</div> : <form className="wa-input"><textarea placeholder="Напишите сообщение..." /><button>Отправить</button></form>}
+      </section>
+    </div>
+  );
+}
+
+function Profile({ user, setUser }) {
+  const [draft, setDraft] = useState(user);
+  const [locked, setLocked] = useState(false);
+  const areas = areaOptions(draft.city);
+  function change(key, value) {
+    setLocked(false);
+    setDraft((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "city") next.searchArea = areaOptions(value)[0];
+      return next;
+    });
+  }
+  function save(event) {
+    event.preventDefault();
+    setUser(draft);
+    setLocked(true);
+  }
+  return (
+    <div className="panel profile-panel">
+      <h2 className="section-title">{user.role === "executor" ? "Анкета исполнителя" : "Профиль клиента"}</h2>
+      <p className="section-note">Эти данные можно изменить при необходимости.</p>
+      <form className="form" onSubmit={save}>
+        <div className="two-col">
+          <label className="field"><span>Имя</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
+          <label className="field"><span>Город</span><select value={draft.city} onChange={(event) => change("city", event.target.value)}>{Object.keys(CITIES).map((city) => <option key={city}>{city}</option>)}</select></label>
+        </div>
+        <label className="field"><span>Район поиска</span><select value={draft.searchArea} onChange={(event) => change("searchArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
+        {user.role === "executor" ? (
+          <>
+            <label className="field"><span>Сервис</span><select value={draft.category || "Трансфер"} onChange={(event) => change("category", event.target.value)}><option>Трансфер</option><option>Клининг</option></select></label>
+            <label className="field"><span>О себе</span><textarea value={draft.about || ""} onChange={(event) => change("about", event.target.value)} /></label>
+          </>
+        ) : null}
+        <button className="primary" type="submit" disabled={locked}>Сохранить</button>
+      </form>
+    </div>
+  );
+}
+
+function SubscriptionModal({ onClose, onRegister }) {
+  return (
+    <div className="modal-backdrop">
+      <section className="subscription-modal" role="dialog" aria-modal="true">
+        <span className="tag">Подписка ХурМа</span>
+        <h2>Оформите подписку</h2>
+        <p>Переписка и заявки доступны после регистрации и активной подписки. В прототипе зарегистрированный пользователь получает доступ сразу.</p>
+        <div className="quick-actions">
+          <button className="primary" type="button" onClick={onRegister}>Зарегистрироваться</button>
+          <button className="secondary" type="button" onClick={onClose}>Позже</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function App() {
+  const saved = loadSaved();
+  const [loading, setLoading] = useState(true);
+  const [authMode, setAuthMode] = useState("choice");
+  const [formMode, setFormMode] = useState("register");
+  const [user, setUserState] = useState(saved.user || null);
+  const [modal, setModal] = useState(false);
+  const [appKey, setAppKey] = useState(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 1800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  function setUser(nextUser) {
+    setUserState(nextUser);
+    saveSaved({ user: nextUser });
+  }
+
+  function home() {
+    if (window.hurmaGoHome) window.hurmaGoHome();
+    if (!user) {
+      setAuthMode("choice");
+      setFormMode("register");
+    }
+    setAppKey((key) => key + 1);
+  }
+
+  function logout() {
+    setUser(null);
+    setAuthMode("choice");
+    setAppKey((key) => key + 1);
+  }
+
+  function authSubmit(data) {
+    if (data.mode === "guest") {
+      setUser({ id: "guest", role: "client", name: "Гость ХурМа", city: "Хургада", searchArea: "Marina", isGuest: true });
+      return;
+    }
+    if (data.mode === "login") {
+      setUser({ id: "client-demo", role: data.role, name: data.role === "executor" ? "Демо исполнитель" : "Демо клиент", city: "Хургада", searchArea: "Marina", subscriptionActive: true, category: "Трансфер" });
+      return;
+    }
+    setUser({ id: Date.now().toString(), role: data.role, name: data.name, email: data.email, city: data.city, searchArea: data.searchArea, subscriptionActive: true, category: data.category });
+  }
+
+  if (loading) return <LoadingScreen />;
+
+  return (
+    <div className="app-shell" key={appKey}>
+      <Header user={user} onHome={home} onLogout={logout} />
+      <main className="main">
+        {!user && authMode === "choice" ? (
+          <AuthChoice onLogin={() => { setFormMode("login"); setAuthMode("form"); }} onRegister={() => { setFormMode("register"); setAuthMode("form"); }} onGuest={() => authSubmit({ mode: "guest" })} />
+        ) : null}
+        {!user && authMode === "form" ? <AuthForm mode={formMode} setMode={setFormMode} onBack={() => setAuthMode("choice")} onSubmit={authSubmit} /> : null}
+        {user ? <Workspace user={user} setUser={setUser} onRequireSubscription={() => setModal(true)} /> : null}
+      </main>
+      {modal ? <SubscriptionModal onClose={() => setModal(false)} onRegister={() => { setModal(false); setUser(null); setAuthMode("form"); setFormMode("register"); }} /> : null}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("app")).render(<App />);
+
+    </script>
+  </body>
+</html>
