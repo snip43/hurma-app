@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260617-react" />
+    <link rel="stylesheet" href="styles.css?v=20260618-executor-form" />
   </head>
   <body>
     <div id="app">
@@ -37,6 +37,8 @@
         </main>  
       </div>
     </noscript>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="src/supabase-config.js"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"></script>
@@ -44,6 +46,10 @@
 const { useEffect, useMemo, useState } = React;
 
 const STORAGE_KEY = "hurma-react-state-v1";
+const supabaseConfig = window.HURMA_SUPABASE || {};
+const supabaseClient = window.supabase && supabaseConfig.url && supabaseConfig.publishableKey
+  ? window.supabase.createClient(supabaseConfig.url, supabaseConfig.publishableKey)
+  : null;
 
 const CITIES = {
   "Хургада": ["Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar", "Эль-Ахья"],
@@ -222,6 +228,74 @@ function isSubscribed(user) {
   return Boolean(user && !user.isGuest && user.subscriptionActive);
 }
 
+function subscriptionIsActive(subscription) {
+  if (!subscription || !["trial", "active"].includes(subscription.status)) return false;
+  return !subscription.ends_at || new Date(subscription.ends_at).getTime() > Date.now();
+}
+
+function formatEventDate(value) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+function mapDatabaseEvent(event) {
+  const typeNames = { general: "Афиша", sport: "Спорт", kids: "Для детей" };
+  return {
+    id: event.id,
+    title: event.title,
+    type: typeNames[event.event_type] || "Афиша",
+    sport: event.sport,
+    age: event.age_limit == null ? null : `${event.age_limit}+`,
+    area: event.area,
+    location: event.location_name,
+    mapUrl: event.map_url,
+    date: formatEventDate(event.starts_at),
+    text: event.description,
+    request: event.request_enabled,
+  };
+}
+
+function mapDatabaseExecutor(executor) {
+  return {
+    id: `db:${executor.user_id}`,
+    databaseUserId: executor.user_id,
+    name: executor.display_name,
+    city: executor.city,
+    area: executor.service_area || "",
+    category: executor.category === "cleaning" ? "Клининг" : "Трансфер",
+    title: executor.headline,
+    price: executor.price_from == null ? "Цена по договоренности" : `от ${Number(executor.price_from)} $`,
+    rating: Number(executor.rating || 0).toFixed(1),
+    about: executor.bio,
+    skills: [...(executor.tags || []), ...(executor.languages || [])],
+  };
+}
+
+async function loadSupabaseUser(authUser) {
+  const [{ data: profile, error: profileError }, { data: subscription, error: subscriptionError }] = await Promise.all([
+    supabaseClient.from("profiles").select("id, display_name, role, city, search_area").eq("id", authUser.id).single(),
+    supabaseClient.from("subscriptions").select("status, starts_at, ends_at, auto_renew, plan_code").eq("user_id", authUser.id).maybeSingle(),
+  ]);
+  if (profileError) throw profileError;
+  if (subscriptionError) throw subscriptionError;
+  return {
+    id: profile.id,
+    email: authUser.email,
+    role: profile.role,
+    name: profile.display_name,
+    city: profile.city,
+    searchArea: profile.search_area || "Marina",
+    category: authUser.user_metadata?.category || "Трансфер",
+    subscription,
+    subscriptionActive: subscriptionIsActive(subscription),
+  };
+}
+
 function Header({ user, onHome, onLogout }) {
   return (
     <header className="topbar">
@@ -249,7 +323,7 @@ function Header({ user, onHome, onLogout }) {
             </button>
           </>
         ) : (
-          <span className="role-pill">Демо: client@hurma.local / 123456</span>
+          <span className="role-pill">Supabase подключен</span>
         )}
       </div>
     </header>
@@ -320,13 +394,17 @@ function AuthForm({ mode, setMode, onBack, onSubmit }) {
   const [city, setCity] = useState("Хургада");
   const [searchArea, setSearchArea] = useState("Marina");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     setSearchArea(areaOptions(city)[0]);
   }, [city]);
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
+    setError("");
+    setInfo("");
     const form = new FormData(event.currentTarget);
     const email = String(form.get("email") || "").trim().toLowerCase();
     const password = String(form.get("password") || "").trim();
@@ -334,16 +412,23 @@ function AuthForm({ mode, setMode, onBack, onSubmit }) {
       setError("Пароль должен быть не короче 6 символов.");
       return;
     }
-    onSubmit({
-      mode,
-      role,
-      name: String(form.get("name") || "Демо клиент").trim(),
-      email,
-      password,
-      city,
-      searchArea,
-      category: String(form.get("category") || "Трансфер"),
-    });
+    setPending(true);
+    try {
+      const result = await onSubmit({
+        mode,
+        role,
+        name: String(form.get("name") || "Пользователь").trim(),
+        email,
+        password,
+        city,
+        searchArea,
+        category: String(form.get("category") || "Трансфер"),
+      });
+      if (result && result.error) setError(result.error);
+      if (result && result.info) setInfo(result.info);
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -398,15 +483,16 @@ function AuthForm({ mode, setMode, onBack, onSubmit }) {
           ) : null}
           <label className="field">
             <span>Email</span>
-            <input name="email" type="email" placeholder="you@example.com" defaultValue={mode === "login" ? "client@hurma.local" : ""} required />
+            <input name="email" type="email" placeholder="you@example.com" required />
           </label>
           <label className="field">
             <span>Пароль</span>
-            <input name="password" type="password" placeholder="Минимум 6 символов" defaultValue={mode === "login" ? "123456" : ""} required />
+            <input name="password" type="password" placeholder="Минимум 6 символов" required />
           </label>
           <div className="error">{error}</div>
-          <button className="primary" type="submit">
-            {mode === "login" ? "Войти" : "Зарегистрироваться"}
+          {info ? <div className="form-info">{info}</div> : null}
+          <button className="primary" type="submit" disabled={pending}>
+            {pending ? "Подождите..." : mode === "login" ? "Войти" : "Зарегистрироваться"}
           </button>
           <button className="secondary" type="button" onClick={() => onSubmit({ mode: "guest" })}>
             Продолжить без регистрации
@@ -443,7 +529,7 @@ function Nav({ view, setView, user }) {
   );
 }
 
-function Workspace({ user, setUser, onRequireSubscription }) {
+function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading, eventsError, databaseExecutors, reloadExecutors }) {
   const [view, setView] = useState("services");
   const [service, setService] = useState("");
   const [chatId, setChatId] = useState("");
@@ -469,15 +555,15 @@ function Workspace({ user, setUser, onRequireSubscription }) {
     <section className="workspace">
       <Nav view={view} setView={setView} user={user} />
       <section className="content">
-        {view === "services" ? <Services user={user} service={service} setService={setService} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} /> : null}
+        {view === "services" ? <Services user={user} service={service} setService={setService} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} /> : null}
-        {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} /> : null}
+        {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} /> : null}
       </section>
     </section>
   );
 }
 
-function Services({ user, service, setService, onRequireSubscription, onStartChat }) {
+function Services({ user, service, setService, onRequireSubscription, onStartChat, events, eventsLoading, eventsError, databaseExecutors }) {
   if (!service) {
     return (
       <div className="service-tabs">
@@ -500,14 +586,14 @@ function Services({ user, service, setService, onRequireSubscription, onStartCha
           Все сервисы
         </button>
       </div>
-      {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} /> : <ExecutorList service={service} user={user} onStartChat={onStartChat} />}
+      {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} sourceEvents={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : <ExecutorList service={service} user={user} onStartChat={onStartChat} databaseExecutors={databaseExecutors} />}
     </>
   );
 }
 
-function ExecutorList({ service, user, onStartChat }) {
+function ExecutorList({ service, user, onStartChat, databaseExecutors }) {
   const [q, setQ] = useState("");
-  const items = EXECUTORS.filter((executor) => executor.category === service && `${executor.name} ${executor.title} ${executor.area}`.toLowerCase().includes(q.toLowerCase()));
+  const items = [...databaseExecutors, ...EXECUTORS].filter((executor) => executor.category === service && `${executor.name} ${executor.title} ${executor.area}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <>
       <div className="panel searchbar">
@@ -540,10 +626,30 @@ function ExecutorList({ service, user, onStartChat }) {
   );
 }
 
-function Afisha({ user, onRequireSubscription }) {
+function Afisha({ user, onRequireSubscription, sourceEvents, eventsLoading, eventsError }) {
   const [filters, setFilters] = useState({ area: "Все районы", type: "Все мероприятия", sport: "Все виды спорта", age: "Любой возраст", q: "" });
+  const [requestedIds, setRequestedIds] = useState([]);
+  const [requestError, setRequestError] = useState("");
+
+  useEffect(() => {
+    if (!supabaseClient || !user || user.isGuest) return;
+    let active = true;
+    supabaseClient
+      .from("requests")
+      .select("event_id")
+      .eq("client_id", user.id)
+      .not("event_id", "is", null)
+      .then(({ data, error }) => {
+        if (!active || error) return;
+        setRequestedIds(data.map((item) => item.event_id));
+      });
+    return () => {
+      active = false;
+    };
+  }, [user && user.id]);
+
   const events = useMemo(() => {
-    return EVENTS.filter((event) => {
+    return sourceEvents.filter((event) => {
       const areaOk = filters.area === "Все районы" || event.area === filters.area;
       const typeOk = filters.type === "Все мероприятия" || event.type === filters.type;
       const sportOk = filters.type !== "Спорт" || filters.sport === "Все виды спорта" || event.sport === filters.sport;
@@ -551,8 +657,26 @@ function Afisha({ user, onRequireSubscription }) {
       const query = `${event.title} ${event.text} ${event.location} ${event.area} ${event.sport || ""}`.toLowerCase();
       return areaOk && typeOk && sportOk && ageOk && query.includes(filters.q.toLowerCase());
     });
-  }, [filters]);
+  }, [filters, sourceEvents]);
   const update = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  const requestEvent = async (eventId) => {
+    setRequestError("");
+    if (!isSubscribed(user)) {
+      onRequireSubscription();
+      return;
+    }
+    const { error } = await supabaseClient.from("requests").insert({
+      client_id: user.id,
+      event_id: eventId,
+      comment: "",
+      status: "new",
+    });
+    if (error) {
+      setRequestError(error.message);
+      return;
+    }
+    setRequestedIds((current) => current.includes(eventId) ? current : [...current, eventId]);
+  };
   return (
     <>
       <div className="panel event-filters event-filters-dynamic">
@@ -574,6 +698,9 @@ function Afisha({ user, onRequireSubscription }) {
           </select>
         ) : null}
       </div>
+      {eventsLoading ? <div className="panel empty-state">Загружаем афишу...</div> : null}
+      {eventsError ? <div className="panel error-state">{eventsError}</div> : null}
+      {requestError ? <div className="panel error-state">{requestError}</div> : null}
       <div className="event-grid">
         {events.map((event) => (
           <article className="event-card" key={event.id}>
@@ -582,11 +709,11 @@ function Afisha({ user, onRequireSubscription }) {
             <p>{event.date}</p>
             <p>{event.text}</p>
             <div className="meta"><span>{event.area}</span><span>{event.location}</span></div>
-            <div className="quick-actions">
+            <div className="quick-actions event-actions">
               <a className="secondary" href={event.mapUrl} target="_blank" rel="noreferrer">Место проведения</a>
               {event.request ? (
-                <button className="primary" type="button" onClick={() => (isSubscribed(user) ? null : onRequireSubscription())}>
-                  Оставить заявку
+                <button className="primary" type="button" disabled={requestedIds.includes(event.id)} onClick={() => requestEvent(event.id)}>
+                  {requestedIds.includes(event.id) ? "Заявка отправлена" : "Оставить заявку"}
                 </button>
               ) : null}
             </div>
@@ -657,10 +784,55 @@ function Messages({ chatId, setChatId, user }) {
   );
 }
 
-function Profile({ user, setUser }) {
+function Profile({ user, setUser, reloadExecutors }) {
   const [draft, setDraft] = useState(user);
   const [locked, setLocked] = useState(false);
+  const [executorDraft, setExecutorDraft] = useState({
+    category: user.category || "Трансфер",
+    headline: "",
+    bio: "",
+    serviceArea: user.searchArea || "Marina",
+    priceFrom: "",
+    languages: "Русский",
+    tags: "",
+    isPublished: false,
+  });
+  const [executorLoading, setExecutorLoading] = useState(user.role === "executor");
+  const [executorMessage, setExecutorMessage] = useState("");
+  const [executorError, setExecutorError] = useState("");
   const areas = areaOptions(draft.city);
+
+  useEffect(() => {
+    if (user.role !== "executor") return;
+    let active = true;
+    supabaseClient
+      .from("executor_profiles")
+      .select("category, headline, bio, service_area, price_from, languages, tags, is_published")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          setExecutorError(error.message);
+        } else if (data) {
+          setExecutorDraft({
+            category: data.category === "cleaning" ? "Клининг" : "Трансфер",
+            headline: data.headline,
+            bio: data.bio,
+            serviceArea: data.service_area || user.searchArea || "Marina",
+            priceFrom: data.price_from == null ? "" : String(data.price_from),
+            languages: (data.languages || []).join(", "),
+            tags: (data.tags || []).join(", "),
+            isPublished: data.is_published,
+          });
+        }
+        setExecutorLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [user.id, user.role]);
+
   function change(key, value) {
     setLocked(false);
     setDraft((current) => {
@@ -669,29 +841,110 @@ function Profile({ user, setUser }) {
       return next;
     });
   }
-  function save(event) {
+  async function save(event) {
     event.preventDefault();
+    const { error } = await supabaseClient
+      .from("profiles")
+      .update({
+        display_name: draft.name,
+        city: draft.city,
+        search_area: draft.searchArea,
+      })
+      .eq("id", user.id);
+    if (error) return;
     setUser(draft);
     setLocked(true);
   }
+
+  function changeExecutor(key, value) {
+    setExecutorMessage("");
+    setExecutorError("");
+    setExecutorDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  async function publishExecutor(event) {
+    event.preventDefault();
+    setExecutorMessage("");
+    setExecutorError("");
+    if (!executorDraft.headline.trim() || !executorDraft.bio.trim()) {
+      setExecutorError("Заполните заголовок и описание объявления.");
+      return;
+    }
+    const splitList = (value) => value.split(",").map((item) => item.trim()).filter(Boolean);
+    const payload = {
+      user_id: user.id,
+      display_name: draft.name.trim(),
+      category: executorDraft.category === "Клининг" ? "cleaning" : "transfer",
+      headline: executorDraft.headline.trim(),
+      bio: executorDraft.bio.trim(),
+      city: draft.city,
+      service_area: executorDraft.serviceArea,
+      price_from: executorDraft.priceFrom === "" ? null : Number(executorDraft.priceFrom),
+      currency: "USD",
+      languages: splitList(executorDraft.languages),
+      tags: splitList(executorDraft.tags),
+      is_published: true,
+    };
+    const { error } = await supabaseClient
+      .from("executor_profiles")
+      .upsert(payload, { onConflict: "user_id" });
+    if (error) {
+      setExecutorError(error.message);
+      return;
+    }
+    setExecutorDraft((current) => ({ ...current, isPublished: true }));
+    setExecutorMessage("Объявление опубликовано и появилось в списке исполнителей.");
+    await reloadExecutors();
+  }
+
   return (
-    <div className="panel profile-panel">
-      <h2 className="section-title">{user.role === "executor" ? "Анкета исполнителя" : "Профиль клиента"}</h2>
-      <p className="section-note">Эти данные можно изменить при необходимости.</p>
-      <form className="form" onSubmit={save}>
-        <div className="two-col">
-          <label className="field"><span>Имя</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
-          <label className="field"><span>Город</span><select value={draft.city} onChange={(event) => change("city", event.target.value)}>{Object.keys(CITIES).map((city) => <option key={city}>{city}</option>)}</select></label>
+    <div className="profile-stack">
+      <div className="panel profile-panel">
+        <h2 className="section-title">{user.role === "executor" ? "Профиль исполнителя" : "Профиль клиента"}</h2>
+        <p className="section-note">Эти данные можно изменить при необходимости.</p>
+        <form className="form" onSubmit={save}>
+          <div className="two-col">
+            <label className="field"><span>Имя</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
+            <label className="field"><span>Город</span><select value={draft.city} onChange={(event) => change("city", event.target.value)}>{Object.keys(CITIES).map((city) => <option key={city}>{city}</option>)}</select></label>
+          </div>
+          <label className="field"><span>Район поиска</span><select value={draft.searchArea} onChange={(event) => change("searchArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
+          <button className="primary" type="submit" disabled={locked}>Сохранить профиль</button>
+        </form>
+      </div>
+
+      {user.role === "executor" ? (
+        <div className="panel profile-panel executor-publish-panel">
+          <div className="publish-heading">
+            <div>
+              <h2 className="section-title">Объявление исполнителя</h2>
+              <p className="section-note">После публикации клиенты увидят объявление в выбранном сервисе.</p>
+            </div>
+            <span className={`publication-status ${executorDraft.isPublished ? "active" : ""}`}>
+              {executorDraft.isPublished ? "Опубликовано" : "Не опубликовано"}
+            </span>
+          </div>
+          {executorLoading ? <div className="form-info">Загружаем объявление...</div> : (
+            <form className="form" onSubmit={publishExecutor}>
+              <div className="two-col">
+                <label className="field"><span>Сервис</span><select value={executorDraft.category} onChange={(event) => changeExecutor("category", event.target.value)}><option>Трансфер</option><option>Клининг</option></select></label>
+                <label className="field"><span>Район работы</span><select value={executorDraft.serviceArea} onChange={(event) => changeExecutor("serviceArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
+              </div>
+              <label className="field"><span>Заголовок объявления</span><input value={executorDraft.headline} onChange={(event) => changeExecutor("headline", event.target.value)} placeholder="Например, трансфер из аэропорта и поездки по городу" /></label>
+              <label className="field"><span>Описание услуг</span><textarea value={executorDraft.bio} onChange={(event) => changeExecutor("bio", event.target.value)} placeholder="Расскажите об автомобиле, маршрутах и условиях работы" /></label>
+              <div className="two-col">
+                <label className="field"><span>Цена от, $</span><input type="number" min="0" step="1" value={executorDraft.priceFrom} onChange={(event) => changeExecutor("priceFrom", event.target.value)} placeholder="12" /></label>
+                <label className="field"><span>Языки через запятую</span><input value={executorDraft.languages} onChange={(event) => changeExecutor("languages", event.target.value)} placeholder="Русский, Английский, Арабский" /></label>
+              </div>
+              <label className="field"><span>Особенности через запятую</span><input value={executorDraft.tags} onChange={(event) => changeExecutor("tags", event.target.value)} placeholder="Аэропорт, детское кресло, минивэн" /></label>
+              {executorError ? <div className="error">{executorError}</div> : null}
+              {executorMessage ? <div className="form-info">{executorMessage}</div> : null}
+              <button className="primary publish-button" type="submit">
+                {executorDraft.isPublished ? "Обновить объявление" : "Разместить объявление"}
+              </button>
+            </form>
+          )}
         </div>
-        <label className="field"><span>Район поиска</span><select value={draft.searchArea} onChange={(event) => change("searchArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
-        {user.role === "executor" ? (
-          <>
-            <label className="field"><span>Сервис</span><select value={draft.category || "Трансфер"} onChange={(event) => change("category", event.target.value)}><option>Трансфер</option><option>Клининг</option></select></label>
-            <label className="field"><span>О себе</span><textarea value={draft.about || ""} onChange={(event) => change("about", event.target.value)} /></label>
-          </>
-        ) : null}
-        <button className="primary" type="submit" disabled={locked}>Сохранить</button>
-      </form>
+      ) : null}
     </div>
   );
 }
@@ -702,7 +955,7 @@ function SubscriptionModal({ onClose, onRegister }) {
       <section className="subscription-modal" role="dialog" aria-modal="true">
         <span className="tag">Подписка ХурМа</span>
         <h2>Оформите подписку</h2>
-        <p>Переписка и заявки доступны после регистрации и активной подписки. В прототипе зарегистрированный пользователь получает доступ сразу.</p>
+        <p>Переписка и заявки доступны после регистрации и активной подписки. Новому пользователю предоставляется тестовый период на 14 дней.</p>
         <div className="quick-actions">
           <button className="primary" type="button" onClick={onRegister}>Зарегистрироваться</button>
           <button className="secondary" type="button" onClick={onClose}>Позже</button>
@@ -717,18 +970,100 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [authMode, setAuthMode] = useState("choice");
   const [formMode, setFormMode] = useState("register");
-  const [user, setUserState] = useState(saved.user || null);
+  const [user, setUserState] = useState(saved.user && saved.user.isGuest ? saved.user : null);
+  const [events, setEvents] = useState([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+  const [eventsError, setEventsError] = useState("");
+  const [databaseExecutors, setDatabaseExecutors] = useState([]);
   const [modal, setModal] = useState(false);
   const [appKey, setAppKey] = useState(0);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1800);
-    return () => clearTimeout(timer);
+    let active = true;
+    async function initialize() {
+      const delay = new Promise((resolve) => setTimeout(resolve, 1800));
+      try {
+        if (supabaseClient) {
+          const { data: { session } } = await supabaseClient.auth.getSession();
+          if (session && active) {
+            setUserState(await loadSupabaseUser(session.user));
+          }
+        }
+      } catch (error) {
+        console.error("Supabase session error", error);
+      }
+      await delay;
+      if (active) setLoading(false);
+    }
+    initialize();
+
+    const authListener = supabaseClient
+      ? supabaseClient.auth.onAuthStateChange((event, session) => {
+          if (event === "SIGNED_OUT" && active) setUserState(null);
+          if (event === "SIGNED_IN" && session && active) {
+            setTimeout(async () => {
+              try {
+                if (active) setUserState(await loadSupabaseUser(session.user));
+              } catch (error) {
+                console.error("Supabase profile error", error);
+              }
+            }, 0);
+          }
+        })
+      : null;
+
+    return () => {
+      active = false;
+      authListener?.data?.subscription?.unsubscribe();
+    };
+  }, []);
+
+  async function loadExecutors() {
+    if (!supabaseClient) return;
+    const { data, error } = await supabaseClient
+      .from("executor_profiles")
+      .select("user_id, display_name, category, headline, bio, city, service_area, price_from, languages, tags, rating")
+      .eq("is_published", true)
+      .order("created_at", { ascending: false });
+    if (!error) setDatabaseExecutors(data.map(mapDatabaseExecutor));
+  }
+
+  useEffect(() => {
+    loadExecutors();
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    async function loadEvents() {
+      if (!supabaseClient) {
+        setEvents(EVENTS);
+        setEventsError("Подключение к Supabase не настроено.");
+        setEventsLoading(false);
+        return;
+      }
+      const { data, error } = await supabaseClient
+        .from("events")
+        .select("id, title, description, event_type, sport, age_limit, area, location_name, map_url, starts_at, request_enabled")
+        .eq("is_published", true)
+        .order("starts_at");
+      if (!active) return;
+      if (error) {
+        setEvents(EVENTS);
+        setEventsError("Не удалось загрузить афишу из базы. Показаны тестовые данные.");
+      } else {
+        setEvents(data.map(mapDatabaseEvent));
+      }
+      setEventsLoading(false);
+    }
+    loadEvents();
+    return () => {
+      active = false;
+    };
   }, []);
 
   function setUser(nextUser) {
     setUserState(nextUser);
-    saveSaved({ user: nextUser });
+    saveSaved({ user: nextUser && nextUser.isGuest ? nextUser : null });
   }
 
   function home() {
@@ -740,22 +1075,63 @@ function App() {
     setAppKey((key) => key + 1);
   }
 
-  function logout() {
-    setUser(null);
+  async function logout() {
+    if (supabaseClient && user && !user.isGuest) await supabaseClient.auth.signOut();
+    setUserState(null);
+    saveSaved({ user: null });
     setAuthMode("choice");
     setAppKey((key) => key + 1);
   }
 
-  function authSubmit(data) {
+  async function authSubmit(data) {
     if (data.mode === "guest") {
       setUser({ id: "guest", role: "client", name: "Гость ХурМа", city: "Хургада", searchArea: "Marina", isGuest: true });
-      return;
+      return { ok: true };
     }
+    if (!supabaseClient) return { error: "Supabase не подключен." };
     if (data.mode === "login") {
-      setUser({ id: "client-demo", role: data.role, name: data.role === "executor" ? "Демо исполнитель" : "Демо клиент", city: "Хургада", searchArea: "Marina", subscriptionActive: true, category: "Трансфер" });
-      return;
+      const { data: authData, error } = await supabaseClient.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      });
+      if (error) return { error: error.message };
+      try {
+        const nextUser = await loadSupabaseUser(authData.user);
+        if (nextUser.role !== data.role) {
+          await supabaseClient.auth.signOut();
+          return { error: "Для этого аккаунта выбрана другая роль." };
+        }
+        setUserState(nextUser);
+        saveSaved({ user: null });
+      } catch (profileError) {
+        return { error: profileError.message };
+      }
+      return { ok: true };
     }
-    setUser({ id: Date.now().toString(), role: data.role, name: data.name, email: data.email, city: data.city, searchArea: data.searchArea, subscriptionActive: true, category: data.category });
+    const { data: authData, error } = await supabaseClient.auth.signUp({
+      email: data.email,
+      password: data.password,
+      options: {
+        data: {
+          display_name: data.name,
+          role: data.role,
+          city: data.city,
+          search_area: data.searchArea,
+          category: data.category,
+        },
+      },
+    });
+    if (error) return { error: error.message };
+    if (!authData.session) {
+      return { info: "Регистрация создана. Подтвердите email по ссылке в письме, затем выполните вход." };
+    }
+    try {
+      setUserState(await loadSupabaseUser(authData.user));
+      saveSaved({ user: null });
+    } catch (profileError) {
+      return { error: profileError.message };
+    }
+    return { ok: true };
   }
 
   if (loading) return <LoadingScreen />;
@@ -768,7 +1144,7 @@ function App() {
           <AuthChoice onLogin={() => { setFormMode("login"); setAuthMode("form"); }} onRegister={() => { setFormMode("register"); setAuthMode("form"); }} onGuest={() => authSubmit({ mode: "guest" })} />
         ) : null}
         {!user && authMode === "form" ? <AuthForm mode={formMode} setMode={setFormMode} onBack={() => setAuthMode("choice")} onSubmit={authSubmit} /> : null}
-        {user ? <Workspace user={user} setUser={setUser} onRequireSubscription={() => setModal(true)} /> : null}
+        {user ? <Workspace user={user} setUser={setUser} onRequireSubscription={() => setModal(true)} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} reloadExecutors={loadExecutors} /> : null}
       </main>
       {modal ? <SubscriptionModal onClose={() => setModal(false)} onRegister={() => { setModal(false); setUser(null); setAuthMode("form"); setFormMode("register"); }} /> : null}
     </div>

@@ -839,6 +839,23 @@ button {
   font-weight: 700;
 }
 
+.form-info {
+  padding: 12px 14px;
+  border: 1px solid rgba(8, 122, 119, 0.22);
+  border-radius: 8px;
+  color: var(--brand-dark);
+  background: rgba(232, 244, 239, 0.88);
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.error-state {
+  margin-bottom: 14px;
+  padding: 14px;
+  color: #7f241c;
+  background: #fff4f1;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
@@ -1036,8 +1053,8 @@ button {
 }
 
 .event-card {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   min-height: 220px;
   padding: 18px;
@@ -1071,6 +1088,33 @@ button {
   margin: 0;
   color: #4f534d;
   line-height: 1.45;
+}
+
+.event-card .meta {
+  margin-top: auto;
+}
+
+.event-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  width: 100%;
+}
+
+.event-actions .primary,
+.event-actions .secondary {
+  width: 100%;
+  height: 60px;
+  min-width: 0;
+  min-height: 60px;
+  padding: 10px 12px;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.event-actions > :only-child {
+  grid-column: 1 / -1;
 }
 
 .event-meta {
@@ -1221,6 +1265,44 @@ button {
 .chat-window,
 .empty-state {
   padding: 18px;
+}
+
+.profile-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.executor-publish-panel {
+  border-color: rgba(8, 122, 119, 0.28);
+}
+
+.publish-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.publication-status {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-radius: 999px;
+  color: #726a54;
+  background: #f0eee6;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.publication-status.active {
+  color: #075e54;
+  background: #dff3e9;
+}
+
+.publish-button {
+  width: 100%;
+  min-height: 56px;
+  font-size: 18px;
 }
 
 .profile-preview {
@@ -1734,6 +1816,7 @@ button {
   .topbar,
   .user-tools,
   .executor-footer,
+  .publish-heading,
   .chat-head {
     align-items: stretch;
     flex-direction: column;
@@ -1749,6 +1832,14 @@ button {
   .nav,
   .chat-input {
     grid-template-columns: 1fr;
+  }
+
+  .event-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .event-actions > :only-child {
+    grid-column: auto;
   }
 
   .wa-shell {
