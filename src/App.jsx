@@ -1,4 +1,5 @@
 const { useEffect, useMemo, useRef, useState } = React;
+const { withTimeout } = window.HurmaAsync;
 
 const STORAGE_KEY = "hurma-react-state-v1";
 const supabaseConfig = window.HURMA_SUPABASE || {};
@@ -360,9 +361,10 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
 
   async function submit(event) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     setError("");
     setInfo("");
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formElement);
     const email = String(form.get("email") || "").trim().toLowerCase();
     const password = String(form.get("password") || "").trim();
     if (password.length < 6) {
@@ -382,7 +384,19 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
         category: String(form.get("category") || "Трансфер"),
       });
       if (result && result.error) setError(result.error);
-      if (result && result.info) setInfo(result.info);
+      if (result && result.info) {
+        setInfo(result.info);
+        if (mode === "register") {
+          const defaultCity = Object.keys(CITIES)[0];
+          formElement.reset();
+          setEmailValue("");
+          setRole("client");
+          setCity(defaultCity);
+          setSearchArea(areaOptions(defaultCity)[0]);
+        }
+      }
+    } catch (submitError) {
+      setError(submitError?.message || "Не удалось завершить регистрацию. Попробуйте ещё раз.");
     } finally {
       setPending(false);
     }
@@ -1182,25 +1196,33 @@ function App() {
     }
     const normalizedEmail = String(data.email || "").trim().toLowerCase();
     const duplicateEmailMessage = "Пользователь с таким email уже существует в базе, выполните вход.";
-    const { data: emailExists, error: emailCheckError } = await supabaseClient.rpc("user_email_exists", {
-      check_email: normalizedEmail,
-    });
+    const { data: emailExists, error: emailCheckError } = await withTimeout(
+      supabaseClient.rpc("user_email_exists", {
+        check_email: normalizedEmail,
+      }),
+      10000,
+      "Не удалось проверить email. Проверьте интернет и попробуйте ещё раз."
+    );
     if (emailCheckError) console.warn("Email duplicate check failed", emailCheckError);
     if (emailExists) return { error: duplicateEmailMessage };
 
-    const { data: authData, error } = await supabaseClient.auth.signUp({
-      email: normalizedEmail,
-      password: data.password,
-      options: {
-        data: {
-          display_name: data.name,
-          role: data.role,
-          city: data.city,
-          search_area: data.searchArea,
-          category: data.category,
+    const { data: authData, error } = await withTimeout(
+      supabaseClient.auth.signUp({
+        email: normalizedEmail,
+        password: data.password,
+        options: {
+          data: {
+            display_name: data.name,
+            role: data.role,
+            city: data.city,
+            search_area: data.searchArea,
+            category: data.category,
+          },
         },
-      },
-    });
+      }),
+      30000,
+      "Сервер регистрации отвечает слишком долго. Проверьте интернет и попробуйте ещё раз."
+    );
     if (error) {
       const message = String(error.message || "");
       if (/already|registered|exists|duplicate/i.test(message)) return { error: duplicateEmailMessage };
