@@ -961,6 +961,17 @@ button {
   outline: none;
 }
 
+.chat-menu-inline {
+  justify-self: auto;
+}
+
+.chat-menu-inline summary {
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
 .sidebar {
   position: sticky;
   top: 92px;
@@ -1072,6 +1083,55 @@ button {
 .event-filters select:focus {
   border-color: var(--brand);
   box-shadow: 0 0 0 3px rgba(47, 111, 94, 0.15);
+}
+
+.filter-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+}
+
+.filter-summary span {
+  color: #6d7069;
+  font-weight: 900;
+}
+
+.filter-open-button {
+  min-width: min(260px, 100%);
+}
+
+.filter-modal {
+  display: grid;
+  gap: 14px;
+  width: min(520px, 100%);
+  max-height: min(720px, calc(100svh - 40px));
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(232, 244, 239, 0.96)),
+    #fff;
+  box-shadow: 0 30px 90px rgba(6, 43, 53, 0.24);
+}
+
+.filter-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.filter-modal-head h2 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.filter-modal .event-filters {
+  grid-template-columns: 1fr;
+  padding: 0;
 }
 
 .service-tabs {
@@ -1651,6 +1711,10 @@ button {
   justify-content: space-between;
 }
 
+.wa-sidebar-head .chat-menu-list {
+  left: 0;
+}
+
 .wa-sidebar-head h2 {
   margin: 0;
   font-size: 24px;
@@ -2076,14 +2140,27 @@ button {
     grid-column: auto;
   }
 
+  .filter-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .filter-open-button {
+    width: 100%;
+  }
+
   .wa-shell {
-    min-height: 720px;
+    min-height: auto;
   }
 
   .wa-sidebar {
-    max-height: 320px;
+    max-height: none;
     border-right: 0;
     border-bottom: 1px solid #d8d2c4;
+  }
+
+  .wa-list-only .wa-dialogs {
+    overflow: visible;
   }
 
   .wa-bubble {

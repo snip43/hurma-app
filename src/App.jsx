@@ -646,9 +646,9 @@ function Nav({ view, setView }) {
   );
 }
 
-function ChatMenu({ user, onServices, onChat, onProfile }) {
+function ChatMenu({ user, onServices, onChat, onProfile, compact = false }) {
   return (
-    <details className="chat-menu">
+    <details className={`chat-menu ${compact ? "chat-menu-inline" : ""}`}>
       <summary aria-label="Меню разделов">☰</summary>
       <div className="chat-menu-list">
         <button type="button" onClick={onServices}>Сервисы</button>
@@ -731,9 +731,8 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
     <section className={`workspace ${view === "messages" ? "workspace-chat-focus" : ""}`}>
       <section className="content">
         {workspaceError ? <div className="panel error-state">{workspaceError}</div> : null}
-        {view === "messages" ? <ChatMenu user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
         {view === "services" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
-        {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} /> : null}
+        {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
         {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} onBack={closeProfile} /> : null}
       </section>
     </section>
@@ -808,6 +807,8 @@ function ExecutorList({ service, user, onStartChat, databaseExecutors }) {
 
 function Afisha({ user, onRequireSubscription, sourceEvents, eventsLoading, eventsError }) {
   const [filters, setFilters] = useState({ area: "Все районы", type: "Все мероприятия", sport: "Все виды спорта", age: "Любой возраст", q: "" });
+  const [filterDraft, setFilterDraft] = useState(filters);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [requestedIds, setRequestedIds] = useState([]);
   const [requestError, setRequestError] = useState("");
 
@@ -838,7 +839,23 @@ function Afisha({ user, onRequireSubscription, sourceEvents, eventsLoading, even
       return areaOk && typeOk && sportOk && ageOk && query.includes(filters.q.toLowerCase());
     });
   }, [filters, sourceEvents]);
-  const update = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  const updateDraft = (key, value) => setFilterDraft((current) => ({ ...current, [key]: value }));
+  const activeFilterCount = [
+    filters.q.trim(),
+    filters.area !== "Все районы",
+    filters.type !== "Все мероприятия",
+    filters.type === "Спорт" && filters.sport !== "Все виды спорта",
+    filters.type === "Для детей" && filters.age !== "Любой возраст",
+  ].filter(Boolean).length;
+  const openFilters = () => {
+    setFilterDraft(filters);
+    setFiltersOpen(true);
+  };
+  const saveFilters = (event) => {
+    event.preventDefault();
+    setFilters(filterDraft);
+    setFiltersOpen(false);
+  };
   const requestEvent = async (eventId) => {
     setRequestError("");
     if (!isSubscribed(user)) {
@@ -859,25 +876,42 @@ function Afisha({ user, onRequireSubscription, sourceEvents, eventsLoading, even
   };
   return (
     <>
-      <div className="panel event-filters event-filters-dynamic">
-        <input value={filters.q} onChange={(event) => update("q", event.target.value)} placeholder="Поиск по афише" />
-        <select value={filters.area} onChange={(event) => update("area", event.target.value)}>
-          {AREA_FILTERS.map((area) => <option key={area}>{area}</option>)}
-        </select>
-        <select value={filters.type} onChange={(event) => update("type", event.target.value)}>
-          {EVENT_TYPES.map((type) => <option key={type}>{type}</option>)}
-        </select>
-        {filters.type === "Спорт" ? (
-          <select value={filters.sport} onChange={(event) => update("sport", event.target.value)}>
-            {SPORTS.map((sport) => <option key={sport}>{sport}</option>)}
-          </select>
-        ) : null}
-        {filters.type === "Для детей" ? (
-          <select value={filters.age} onChange={(event) => update("age", event.target.value)}>
-            {AGES.map((age) => <option key={age}>{age}</option>)}
-          </select>
-        ) : null}
+      <div className="panel filter-summary">
+        <button className="primary filter-open-button" type="button" onClick={openFilters}>
+          Фильтры{activeFilterCount ? ` · ${activeFilterCount}` : ""}
+        </button>
+        <span>{events.length} мероприятий</span>
       </div>
+      {filtersOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Фильтры афиши">
+          <form className="filter-modal" onSubmit={saveFilters}>
+            <div className="filter-modal-head">
+              <h2>Фильтры афиши</h2>
+              <button className="ghost" type="button" onClick={() => setFiltersOpen(false)}>×</button>
+            </div>
+            <div className="event-filters event-filters-dynamic">
+              <input value={filterDraft.q} onChange={(event) => updateDraft("q", event.target.value)} placeholder="Поиск по афише" />
+              <select value={filterDraft.area} onChange={(event) => updateDraft("area", event.target.value)}>
+                {AREA_FILTERS.map((area) => <option key={area}>{area}</option>)}
+              </select>
+              <select value={filterDraft.type} onChange={(event) => updateDraft("type", event.target.value)}>
+                {EVENT_TYPES.map((type) => <option key={type}>{type}</option>)}
+              </select>
+              {filterDraft.type === "Спорт" ? (
+                <select value={filterDraft.sport} onChange={(event) => updateDraft("sport", event.target.value)}>
+                  {SPORTS.map((sport) => <option key={sport}>{sport}</option>)}
+                </select>
+              ) : null}
+              {filterDraft.type === "Для детей" ? (
+                <select value={filterDraft.age} onChange={(event) => updateDraft("age", event.target.value)}>
+                  {AGES.map((age) => <option key={age}>{age}</option>)}
+                </select>
+              ) : null}
+            </div>
+            <button className="primary" type="submit">Сохранить</button>
+          </form>
+        </div>
+      ) : null}
       {eventsLoading ? <div className="panel empty-state">Загружаем афишу...</div> : null}
       {eventsError ? <div className="panel error-state">{eventsError}</div> : null}
       {requestError ? <div className="panel error-state">{requestError}</div> : null}
@@ -904,7 +938,7 @@ function Afisha({ user, onRequireSubscription, sourceEvents, eventsLoading, even
   );
 }
 
-function Messages({ chatId, setChatId, user }) {
+function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
   const [conversations, setConversations] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -1142,7 +1176,7 @@ function Messages({ chatId, setChatId, user }) {
       <div className="wa-shell wa-list-only">
         <div className="wa-sidebar wa-sidebar-full">
           <div className="wa-sidebar-head">
-            <h2>ХурМа</h2>
+            <ChatMenu user={user} onServices={onServices} onChat={onChat} onProfile={onProfile} compact />
             {!user.isGuest ? <button className="wa-icon-button" type="button" onClick={() => setContactPicker(true)} aria-label="Добавить собеседника">+</button> : null}
           </div>
           <div className="wa-search">Поиск или новый чат</div>
