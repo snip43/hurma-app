@@ -645,7 +645,9 @@ function Nav({ view, setView, user }) {
 function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading, eventsError, databaseExecutors, reloadExecutors }) {
   const [view, setView] = useState("services");
   const [service, setService] = useState("");
-  const [chatId, setChatId] = useState("");
+  const savedWorkspace = loadSaved();
+  const savedChatByUser = savedWorkspace.chatByUser || {};
+  const [chatId, setChatId] = useState(savedChatByUser[user.id] || "");
   const [workspaceError, setWorkspaceError] = useState("");
 
   function goHome() {
@@ -653,6 +655,14 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
     setService("");
     setChatId("");
   }
+
+  useEffect(() => {
+    const current = loadSaved();
+    const nextChatByUser = { ...(current.chatByUser || {}) };
+    if (chatId) nextChatByUser[user.id] = chatId;
+    else delete nextChatByUser[user.id];
+    saveSaved({ ...current, chatByUser: nextChatByUser });
+  }, [chatId, user.id]);
 
   async function startExecutorChat(executor) {
     setWorkspaceError("");
@@ -679,8 +689,8 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
   window.hurmaGoHome = goHome;
 
   return (
-    <section className="workspace">
-      <Nav view={view} setView={setView} user={user} />
+    <section className={`workspace ${view === "messages" ? "workspace-chat-focus" : ""}`}>
+      {view !== "messages" ? <Nav view={view} setView={setView} user={user} /> : null}
       <section className="content">
         {workspaceError ? <div className="panel error-state">{workspaceError}</div> : null}
         {view === "services" ? <Services user={user} service={service} setService={setService} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
@@ -1071,13 +1081,20 @@ function Messages({ chatId, setChatId, user }) {
     return query.includes(contactSearch.toLowerCase());
   });
   const visibleMessages = activeConversationId ? messages : (chat?.messages || []);
-  const renderedChat = chat || { title: "Чат ХурМа", subtitle: "Загружаем переписку", readonly: true, messages: [] };
-  const canSendInCurrentChat = Boolean(activeConversationId && !renderedChat.readonly && !activeManualChat);
+  const renderedChat = chat || (activeConversationId
+    ? { title: "Чат ХурМа", subtitle: "Личная переписка", readonly: false, messages: [] }
+    : { title: "Чат ХурМа", subtitle: "Загружаем переписку", readonly: true, messages: [] });
+  const canSendInCurrentChat = Boolean(activeConversationId && !renderedChat.readonly && !activeManualChat && canUseDatabaseChat);
   const readonlyText = activeManualChat
     ? "Этот контакт сохранён локально. Когда он зарегистрируется в ХурМа, можно будет начать переписку."
     : renderedChat.readonly
       ? "Это новостной канал. Сообщения публикуются как объявления."
       : "Это демо-чат. Для настоящей переписки выберите зарегистрированного пользователя через плюс.";
+  const emptyText = canSendInCurrentChat
+    ? "Напишите первым."
+    : activeManualChat
+      ? "Это сохранённый телефонный контакт. Выберите зарегистрированного пользователя через плюс, чтобы начать переписку."
+      : "Для переписки выберите зарегистрированного пользователя через плюс.";
 
   if (!chatId) {
     return (
@@ -1111,13 +1128,14 @@ function Messages({ chatId, setChatId, user }) {
                 <button type="button" onClick={() => setContactPicker(false)}>×</button>
               </div>
               <input value={contactSearch} onChange={(event) => setContactSearch(event.target.value)} placeholder="Поиск контакта" />
+              <div className="wa-notice">Для переписки выберите зарегистрированного пользователя из списка ниже. Телефонный контакт можно только сохранить как приглашение.</div>
               <div className="quick-actions contact-actions">
-                <button className="secondary" type="button" onClick={() => setManualForm(true)}>Добавить вручную</button>
+                <button className="secondary" type="button" onClick={() => setManualForm(true)}>Сохранить телефонный контакт</button>
                 <button className="secondary" type="button" onClick={importPhoneContact}>Из контактов телефона</button>
               </div>
               {manualForm ? (
                 <form className="manual-contact-form" onSubmit={saveManualContact}>
-                  <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Имя контакта" />
+                  <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Имя незарегистрированного контакта" />
                   <input value={manualPhone} onChange={(event) => setManualPhone(event.target.value)} placeholder="Телефон или WhatsApp" />
                   <button className="primary" type="submit">Сохранить контакт</button>
                 </form>
@@ -1155,7 +1173,7 @@ function Messages({ chatId, setChatId, user }) {
               <span>{message.text}</span>
               <small>{message.time}</small>
             </div>
-          )) : <div className="wa-empty"><strong>Сообщений пока нет</strong><span>Напишите первым.</span></div>}
+          )) : <div className="wa-empty"><strong>Сообщений пока нет</strong><span>{emptyText}</span></div>}
         </div>
         {canSendInCurrentChat ? <form className="wa-input" onSubmit={sendMessage}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Напишите сообщение..." /><button type="submit">Отправить</button></form> : <div className="wa-readonly">{readonlyText}</div>}
       </section>
@@ -1479,6 +1497,7 @@ function App() {
       return { ok: true };
     }
     if (!supabaseClient) return { error: "Supabase не подключен." };
+    const authRedirectTo = `${window.location.origin}${window.location.pathname}`;
     if (data.mode === "login") {
       const { data: authData, error } = await supabaseClient.auth.signInWithPassword({
         email: data.email,
@@ -1515,6 +1534,7 @@ function App() {
         email: normalizedEmail,
         password: data.password,
         options: {
+          emailRedirectTo: authRedirectTo,
           data: {
             display_name: data.name,
             role: data.role,
