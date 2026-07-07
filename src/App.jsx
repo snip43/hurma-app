@@ -270,13 +270,22 @@ function toUserError(error) {
   if (/cannot coerce.*single json object|single json object/i.test(message)) {
     return "Не удалось загрузить данные аккаунта. Попробуйте войти ещё раз. Если ошибка повторится, напишите администратору.";
   }
+  if (/row-level security|violates row-level security/i.test(message)) {
+    return "Сообщение не отправилось из-за прав доступа. Обновите страницу и попробуйте ещё раз.";
+  }
+  if (/active subscription required/i.test(message)) {
+    return "Для отправки личных сообщений нужна активная подписка.";
+  }
+  if (/cannot send message/i.test(message)) {
+    return "Вы не можете отправить сообщение в этот чат. Попробуйте открыть переписку заново.";
+  }
   if (/failed to fetch|network|timeout|timed out/i.test(message)) {
     return "Не удалось связаться с сервером. Проверьте интернет и попробуйте ещё раз.";
   }
   return "Что-то пошло не так. Попробуйте ещё раз.";
 }
 
-function Header({ user, onHome, onLogout }) {
+function Header({ user, onHome, onProfile, onLogout }) {
   return (
     <header className="topbar">
       <button className="brand brand-home" type="button" onClick={onHome} aria-label="На главную">
@@ -295,9 +304,9 @@ function Header({ user, onHome, onLogout }) {
         ) : null}
         {user ? (
           <>
-            <span className="role-pill">
+            <button className="role-pill role-pill-button" type="button" onClick={onProfile} disabled={user.isGuest}>
               {user.role === "executor" ? "Исполнитель" : user.isGuest ? "Гость" : "Клиент"} · {user.name}
-            </span>
+            </button>
             <button className="secondary" type="button" onClick={onLogout}>
               Выйти
             </button>
@@ -622,7 +631,7 @@ function PasswordRecoveryForm({ onComplete }) {
   );
 }
 
-function Nav({ view, setView, user }) {
+function Nav({ view, setView }) {
   return (
     <aside className="panel sidebar">
       <nav className="nav">
@@ -632,13 +641,21 @@ function Nav({ view, setView, user }) {
         <button className={view === "messages" ? "active" : ""} onClick={() => setView("messages")}>
           Чат
         </button>
-        {!user.isGuest ? (
-          <button className={view === "profile" ? "active" : ""} onClick={() => setView("profile")}>
-            Профиль
-          </button>
-        ) : null}
       </nav>
     </aside>
+  );
+}
+
+function ChatMenu({ user, onServices, onChat, onProfile }) {
+  return (
+    <details className="chat-menu">
+      <summary aria-label="Меню разделов">☰</summary>
+      <div className="chat-menu-list">
+        <button type="button" onClick={onServices}>Сервисы</button>
+        <button type="button" onClick={onChat}>Чат</button>
+        {!user.isGuest ? <button type="button" onClick={onProfile}>Профиль</button> : null}
+      </div>
+    </details>
   );
 }
 
@@ -653,6 +670,22 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
   function goHome() {
     setView("services");
     setService("");
+    setChatId("");
+  }
+
+  function openServices() {
+    setView("services");
+    setService("");
+    setChatId("");
+  }
+
+  function openChat() {
+    setView("messages");
+  }
+
+  function openProfile() {
+    if (user.isGuest) return;
+    setView("profile");
     setChatId("");
   }
 
@@ -687,12 +720,14 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
   }
 
   window.hurmaGoHome = goHome;
+  window.hurmaOpenProfile = openProfile;
 
   return (
     <section className={`workspace ${view === "messages" ? "workspace-chat-focus" : ""}`}>
-      {view !== "messages" ? <Nav view={view} setView={setView} user={user} /> : null}
+      {view !== "messages" ? <Nav view={view} setView={setView} /> : null}
       <section className="content">
         {workspaceError ? <div className="panel error-state">{workspaceError}</div> : null}
+        {view === "messages" ? <ChatMenu user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
         {view === "services" ? <Services user={user} service={service} setService={setService} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} /> : null}
         {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} /> : null}
@@ -1058,13 +1093,12 @@ function Messages({ chatId, setChatId, user }) {
       setChatError("Этот чат пока не подключён к базе. Выберите зарегистрированного пользователя через плюс.");
       return;
     }
-    const { error } = await supabaseClient.from("messages").insert({
-      conversation_id: activeConversationId,
-      sender_id: user.id,
-      body: text,
+    const { error } = await supabaseClient.rpc("send_chat_message", {
+      target_conversation_id: activeConversationId,
+      message_body: text,
     });
     if (error) {
-      setChatError(error.message);
+      setChatError(toUserError(error));
       return;
     }
     setDraft("");
@@ -1483,6 +1517,10 @@ function App() {
     setAppKey((key) => key + 1);
   }
 
+  function openProfileFromHeader() {
+    if (window.hurmaOpenProfile) window.hurmaOpenProfile();
+  }
+
   async function logout() {
     if (supabaseClient && user && !user.isGuest) await supabaseClient.auth.signOut();
     setUserState(null);
@@ -1580,7 +1618,7 @@ function App() {
 
   return (
     <div className={`app-shell ${!user || passwordRecovery ? "auth-screen" : ""}`} key={appKey}>
-      <Header user={passwordRecovery ? null : user} onHome={home} onLogout={logout} />
+      <Header user={passwordRecovery ? null : user} onHome={home} onProfile={openProfileFromHeader} onLogout={logout} />
       <main className="main">
         {passwordRecovery ? (
           <PasswordRecoveryForm onComplete={() => {

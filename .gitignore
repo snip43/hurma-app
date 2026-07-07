@@ -1,0 +1,6 @@
+.agents/
+.codex/
+.playwright-mcp/
+docs/
+server.js
+hurma-*.png

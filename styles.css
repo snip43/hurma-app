@@ -386,6 +386,7 @@ button {
 .status-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 30px;
   padding: 5px 10px;
   border: 1px solid var(--line);
@@ -397,6 +398,22 @@ button {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.role-pill-button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.role-pill-button:hover:not(:disabled),
+.role-pill-button:focus-visible:not(:disabled) {
+  border-color: rgba(8, 122, 119, 0.32);
+  background: #f3faf7;
+  outline: none;
+}
+
+.role-pill-button:disabled {
+  cursor: default;
 }
 
 .location-pill {
@@ -887,6 +904,61 @@ button {
 
 .workspace-chat-focus {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.chat-menu {
+  position: relative;
+  justify-self: start;
+  z-index: 3;
+}
+
+.chat-menu summary {
+  display: inline-grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid rgba(8, 122, 119, 0.2);
+  border-radius: 8px;
+  color: var(--brand-dark);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 22px rgba(33, 79, 73, 0.12);
+  cursor: pointer;
+  font-size: 24px;
+  font-weight: 900;
+  list-style: none;
+}
+
+.chat-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.chat-menu-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  display: grid;
+  min-width: 190px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 18px 34px rgba(33, 79, 73, 0.16);
+}
+
+.chat-menu-list button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--brand-dark);
+  background: transparent;
+  text-align: left;
+  font-weight: 900;
+}
+
+.chat-menu-list button:hover,
+.chat-menu-list button:focus-visible {
+  background: #e8f0eb;
+  outline: none;
 }
 
 .sidebar {
