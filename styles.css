@@ -885,6 +885,10 @@ button {
   gap: 22px;
 }
 
+.workspace-chat-focus {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .sidebar {
   position: sticky;
   top: 92px;
