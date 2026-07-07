@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260618-loading-logo-safe" />
+    <link rel="stylesheet" href="styles.css?v=20260707-chat-plus" />
   </head>
   <body>
     <div id="app">
@@ -39,13 +39,15 @@
     </noscript>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/supabase-config.js"></script>
-    <script src="src/async-utils.js"></script>
+    <script src="src/async-utils.js?v=20260707-chat-plus"></script>
+    <script src="src/chat-utils.js?v=20260707-chat-plus"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"></script>
     <script type="text/babel" data-presets="react">
 const { useEffect, useMemo, useRef, useState } = React;
 const { withTimeout } = window.HurmaAsync;
+const { normalizeContact, buildManualContact } = window.HurmaChatUtils;
 
 const STORAGE_KEY = "hurma-react-state-v1";
 const supabaseConfig = window.HURMA_SUPABASE || {};
@@ -654,6 +656,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
   const [view, setView] = useState("services");
   const [service, setService] = useState("");
   const [chatId, setChatId] = useState("");
+  const [workspaceError, setWorkspaceError] = useState("");
 
   function goHome() {
     setView("services");
@@ -661,9 +664,22 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
     setChatId("");
   }
 
-  function startExecutorChat(executor) {
+  async function startExecutorChat(executor) {
+    setWorkspaceError("");
     if (!isSubscribed(user)) {
       onRequireSubscription();
+      return;
+    }
+    if (executor.databaseUserId && supabaseClient) {
+      const { data, error } = await supabaseClient.rpc("create_direct_conversation", {
+        other_user_id: executor.databaseUserId,
+      });
+      if (error) {
+        setWorkspaceError(error.message);
+        return;
+      }
+      setChatId(`conversation:${data}`);
+      setView("messages");
       return;
     }
     setChatId(`executor:${executor.id}`);
@@ -676,6 +692,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
     <section className="workspace">
       <Nav view={view} setView={setView} user={user} />
       <section className="content">
+        {workspaceError ? <div className="panel error-state">{workspaceError}</div> : null}
         {view === "services" ? <Services user={user} service={service} setService={setService} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} /> : null}
         {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} /> : null}
@@ -846,6 +863,20 @@ function Afisha({ user, onRequireSubscription, sourceEvents, eventsLoading, even
 }
 
 function Messages({ chatId, setChatId, user }) {
+  const [conversations, setConversations] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [draft, setDraft] = useState("");
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactPicker, setContactPicker] = useState(false);
+  const [manualForm, setManualForm] = useState(false);
+  const [manualName, setManualName] = useState("");
+  const [manualPhone, setManualPhone] = useState("");
+  const [manualContacts, setManualContacts] = useState(() => loadSaved().manualContacts || []);
+  const [chatError, setChatError] = useState("");
+  const [chatInfo, setChatInfo] = useState("");
+  const [loadingChats, setLoadingChats] = useState(false);
+  const activeConversationId = chatId.startsWith("conversation:") ? chatId.replace("conversation:", "") : "";
   const executorId = chatId.startsWith("executor:") ? chatId.replace("executor:", "") : "";
   const executor = EXECUTORS.find((item) => item.id === executorId);
   const executorChat = executor ? {
@@ -857,28 +888,263 @@ function Messages({ chatId, setChatId, user }) {
       { from: executor.name, text: "Здравствуйте! Напишите, что нужно сделать и на какое время.", time: "сейчас", me: false },
     ],
   } : null;
-  const chat = executorChat || COMMUNITY_CHATS.find((item) => item.id === chatId);
+  const activeDatabaseChat = conversations.find((item) => item.id === activeConversationId);
+  const activeManualChat = manualContacts.find((item) => item.id === chatId);
+  const chat = activeDatabaseChat || activeManualChat || executorChat || COMMUNITY_CHATS.find((item) => item.id === chatId);
+  const canUseDatabaseChat = Boolean(supabaseClient && user && !user.isGuest);
+
+  async function loadConversations() {
+    if (!canUseDatabaseChat) {
+      setConversations([]);
+      return;
+    }
+    setLoadingChats(true);
+    const { data, error } = await supabaseClient
+      .from("conversation_members")
+      .select("conversation_id, conversations(id, conversation_type, title, subtitle, is_readonly, updated_at)")
+      .eq("user_id", user.id);
+    if (error) {
+      setChatError(error.message);
+      setLoadingChats(false);
+      return;
+    }
+    const conversationIds = data.map((item) => item.conversation_id);
+    if (!conversationIds.length) {
+      setConversations([]);
+      setLoadingChats(false);
+      return;
+    }
+    const [{ data: memberRows }, { data: messageRows }] = await Promise.all([
+      supabaseClient
+        .from("conversation_members")
+        .select("conversation_id, user_id, profiles(id, display_name, role, city, search_area)")
+        .in("conversation_id", conversationIds),
+      supabaseClient
+        .from("messages")
+        .select("conversation_id, body, created_at")
+        .in("conversation_id", conversationIds)
+        .order("created_at", { ascending: false }),
+    ]);
+    const mapped = data.map((item) => {
+      const conversation = item.conversations;
+      const members = (memberRows || []).filter((member) => member.conversation_id === item.conversation_id);
+      const otherMember = members.find((member) => member.user_id !== user.id);
+      const profile = otherMember?.profiles;
+      const lastMessage = (messageRows || []).find((message) => message.conversation_id === item.conversation_id);
+      const isDirect = conversation.conversation_type === "direct";
+      return {
+        id: conversation.id,
+        title: isDirect ? (profile?.display_name || "Собеседник") : (conversation.title || "Чат ХурМа"),
+        subtitle: isDirect ? [profile?.role === "executor" ? "Исполнитель" : "Клиент", profile?.city, profile?.search_area].filter(Boolean).join(" · ") : (conversation.subtitle || "Групповой чат"),
+        readonly: conversation.is_readonly,
+        preview: lastMessage?.body || "Сообщений пока нет",
+        time: lastMessage ? formatEventDate(lastMessage.created_at) : "",
+      };
+    });
+    setConversations(mapped);
+    setLoadingChats(false);
+  }
+
+  async function loadContacts() {
+    if (!canUseDatabaseChat) return;
+    const { data, error } = await supabaseClient
+      .from("profiles")
+      .select("id, display_name, role, city, search_area")
+      .neq("id", user.id)
+      .order("display_name");
+    if (error) {
+      setChatError(error.message);
+      return;
+    }
+    setContacts(data.map(normalizeContact));
+  }
+
+  async function loadMessages(conversationId) {
+    if (!conversationId || !canUseDatabaseChat) return;
+    const { data, error } = await supabaseClient
+      .from("messages")
+      .select("id, sender_id, body, created_at")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true });
+    if (error) {
+      setChatError(error.message);
+      return;
+    }
+    setMessages(data.map((message) => ({
+      id: message.id,
+      text: message.body,
+      time: new Date(message.created_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
+      me: message.sender_id === user.id,
+    })));
+  }
+
+  useEffect(() => {
+    loadConversations();
+    loadContacts();
+  }, [user && user.id]);
+
+  useEffect(() => {
+    setChatError("");
+    setChatInfo("");
+    setDraft("");
+    if (activeConversationId) loadMessages(activeConversationId);
+    else setMessages([]);
+  }, [chatId]);
+
+  async function startContactChat(contact) {
+    setChatError("");
+    setChatInfo("");
+    if (!contact.canMessage) {
+      setChatId(contact.id);
+      setContactPicker(false);
+      setChatInfo("Этот контакт пока не зарегистрирован в ХурМа. Можно сохранить его и пригласить позже.");
+      return;
+    }
+    if (!isSubscribed(user)) {
+      setChatError("Для личных сообщений нужна активная подписка.");
+      return;
+    }
+    const { data, error } = await supabaseClient.rpc("create_direct_conversation", {
+      other_user_id: contact.id,
+    });
+    if (error) {
+      setChatError(error.message);
+      return;
+    }
+    await loadConversations();
+    setContactPicker(false);
+    setChatId(`conversation:${data}`);
+  }
+
+  function saveManualContact(event) {
+    event.preventDefault();
+    const contact = buildManualContact(manualName, manualPhone);
+    const nextContacts = [contact, ...manualContacts];
+    setManualContacts(nextContacts);
+    saveSaved({ ...loadSaved(), manualContacts: nextContacts });
+    setManualName("");
+    setManualPhone("");
+    setManualForm(false);
+    startContactChat(contact);
+  }
+
+  async function importPhoneContact() {
+    setChatError("");
+    if (navigator.contacts && navigator.contacts.select) {
+      try {
+        const selected = await navigator.contacts.select(["name", "tel"], { multiple: false });
+        const first = selected && selected[0];
+        if (first) {
+          const contact = buildManualContact(first.name?.[0] || "Контакт", first.tel?.[0] || "");
+          const nextContacts = [contact, ...manualContacts];
+          setManualContacts(nextContacts);
+          saveSaved({ ...loadSaved(), manualContacts: nextContacts });
+          startContactChat(contact);
+          return;
+        }
+      } catch (error) {
+        setChatError("Не удалось открыть контакты телефона. Можно добавить контакт вручную.");
+      }
+    }
+    setManualForm(true);
+    setChatInfo("Браузер не дал доступ к телефонной книге. Добавьте контакт вручную.");
+  }
+
+  async function sendMessage(event) {
+    event.preventDefault();
+    const text = draft.trim();
+    if (!text) return;
+    if (!activeConversationId) {
+      setChatError("Этот чат пока не подключён к базе. Выберите зарегистрированного пользователя через плюс.");
+      return;
+    }
+    const { error } = await supabaseClient.from("messages").insert({
+      conversation_id: activeConversationId,
+      sender_id: user.id,
+      body: text,
+    });
+    if (error) {
+      setChatError(error.message);
+      return;
+    }
+    setDraft("");
+    await loadMessages(activeConversationId);
+    await loadConversations();
+  }
+
+  const databaseDialogs = conversations.map((item) => ({ ...item, chatId: `conversation:${item.id}` }));
+  const manualDialogs = manualContacts.map((item) => ({ ...item, chatId: item.id, preview: item.subtitle, readonly: true }));
+  const staticDialogs = COMMUNITY_CHATS.map((item) => ({ ...item, chatId: item.id, preview: item.subtitle }));
+  const dialogs = [...databaseDialogs, ...manualDialogs, ...staticDialogs];
+  const visibleContacts = contacts.filter((contact) => {
+    const query = `${contact.title} ${contact.subtitle}`.toLowerCase();
+    return query.includes(contactSearch.toLowerCase());
+  });
+  const visibleMessages = activeConversationId ? messages : (chat?.messages || []);
+  const renderedChat = chat || { title: "Чат ХурМа", subtitle: "Загружаем переписку", readonly: true, messages: [] };
+  const canSendInCurrentChat = Boolean(activeConversationId && !renderedChat.readonly && !activeManualChat);
+  const readonlyText = activeManualChat
+    ? "Этот контакт сохранён локально. Когда он зарегистрируется в ХурМа, можно будет начать переписку."
+    : renderedChat.readonly
+      ? "Это новостной канал. Сообщения публикуются как объявления."
+      : "Это демо-чат. Для настоящей переписки выберите зарегистрированного пользователя через плюс.";
+
   if (!chatId) {
     return (
       <div className="wa-shell wa-list-only">
         <div className="wa-sidebar wa-sidebar-full">
           <div className="wa-sidebar-head">
             <h2>ХурМа</h2>
+            {!user.isGuest ? <button className="wa-icon-button" type="button" onClick={() => setContactPicker(true)} aria-label="Добавить собеседника">+</button> : null}
           </div>
           <div className="wa-search">Поиск или новый чат</div>
+          {chatError ? <div className="wa-notice error">{chatError}</div> : null}
+          {loadingChats ? <div className="wa-notice">Загружаем чаты...</div> : null}
           <div className="wa-dialogs">
-            {COMMUNITY_CHATS.map((item) => (
-              <button className="wa-dialog" key={item.id} type="button" onClick={() => setChatId(item.id)}>
+            {dialogs.map((item) => (
+              <button className="wa-dialog" key={item.chatId} type="button" onClick={() => setChatId(item.chatId)}>
                 <div className="wa-avatar">{item.title.slice(0, 1)}</div>
                 <div className="wa-dialog-main">
                   <div className="wa-dialog-row">
                     <strong>{item.title}</strong>
+                    {item.time ? <small>{item.time}</small> : null}
                   </div>
-                  <span className="wa-dialog-preview">{item.subtitle}</span>
+                  <span className="wa-dialog-preview">{item.preview || item.subtitle}</span>
                 </div>
               </button>
             ))}
           </div>
+          {contactPicker ? (
+            <div className="contact-panel">
+              <div className="contact-panel-head">
+                <strong>Добавить собеседника</strong>
+                <button type="button" onClick={() => setContactPicker(false)}>×</button>
+              </div>
+              <input value={contactSearch} onChange={(event) => setContactSearch(event.target.value)} placeholder="Поиск контакта" />
+              <div className="quick-actions contact-actions">
+                <button className="secondary" type="button" onClick={() => setManualForm(true)}>Добавить вручную</button>
+                <button className="secondary" type="button" onClick={importPhoneContact}>Из контактов телефона</button>
+              </div>
+              {manualForm ? (
+                <form className="manual-contact-form" onSubmit={saveManualContact}>
+                  <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Имя контакта" />
+                  <input value={manualPhone} onChange={(event) => setManualPhone(event.target.value)} placeholder="Телефон или WhatsApp" />
+                  <button className="primary" type="submit">Сохранить контакт</button>
+                </form>
+              ) : null}
+              <div className="contact-list">
+                {visibleContacts.map((contact) => (
+                  <button className="wa-dialog compact" key={contact.id} type="button" onClick={() => startContactChat(contact)}>
+                    <div className="wa-avatar">{contact.title.slice(0, 1)}</div>
+                    <div className="wa-dialog-main">
+                      <strong>{contact.title}</strong>
+                      <span className="wa-dialog-preview">{contact.subtitle}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     );
@@ -888,18 +1154,20 @@ function Messages({ chatId, setChatId, user }) {
       <section className="wa-chat">
         <div className="wa-chat-head">
           <button className="wa-mobile-back" type="button" onClick={() => setChatId("")}>←</button>
-          <div className="wa-avatar">{chat.title.slice(0, 1)}</div>
-          <div className="wa-chat-title"><strong>{chat.title}</strong><span>{chat.subtitle}</span></div>
+          <div className="wa-avatar">{renderedChat.title.slice(0, 1)}</div>
+          <div className="wa-chat-title"><strong>{renderedChat.title}</strong><span>{renderedChat.subtitle}</span></div>
         </div>
         <div className="wa-messages">
-          {chat.messages.map((message, index) => (
-            <div className={`wa-bubble ${message.me ? "mine" : ""}`} key={index}>
+          {chatInfo ? <div className="wa-notice">{chatInfo}</div> : null}
+          {chatError ? <div className="wa-notice error">{chatError}</div> : null}
+          {visibleMessages.length ? visibleMessages.map((message, index) => (
+            <div className={`wa-bubble ${message.me ? "mine" : ""}`} key={message.id || index}>
               <span>{message.text}</span>
               <small>{message.time}</small>
             </div>
-          ))}
+          )) : <div className="wa-empty"><strong>Сообщений пока нет</strong><span>Напишите первым.</span></div>}
         </div>
-        {chat.readonly ? <div className="wa-readonly">Это новостной канал. Сообщения публикуются как объявления.</div> : <form className="wa-input"><textarea placeholder="Напишите сообщение..." /><button>Отправить</button></form>}
+        {canSendInCurrentChat ? <form className="wa-input" onSubmit={sendMessage}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Напишите сообщение..." /><button type="submit">Отправить</button></form> : <div className="wa-readonly">{readonlyText}</div>}
       </section>
     </div>
   );
