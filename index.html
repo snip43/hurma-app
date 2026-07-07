@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260707-area-all" />
+    <link rel="stylesheet" href="styles.css?v=20260707-profile-back" />
   </head>
   <body>
     <div id="app">
@@ -39,8 +39,8 @@
     </noscript>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/supabase-config.js"></script>
-    <script src="src/async-utils.js?v=20260707-area-all"></script>
-    <script src="src/chat-utils.js?v=20260707-area-all"></script>
+    <script src="src/async-utils.js?v=20260707-profile-back"></script>
+    <script src="src/chat-utils.js?v=20260707-profile-back"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"></script>
@@ -712,6 +712,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
   const savedWorkspace = loadSaved();
   const savedChatByUser = savedWorkspace.chatByUser || {};
   const [chatId, setChatId] = useState(savedChatByUser[user.id] || "");
+  const [profileReturnView, setProfileReturnView] = useState("services");
   const [workspaceError, setWorkspaceError] = useState("");
 
   function goHome() {
@@ -732,8 +733,12 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
 
   function openProfile() {
     if (user.isGuest) return;
+    setProfileReturnView(view === "profile" ? "services" : view);
     setView("profile");
-    setChatId("");
+  }
+
+  function closeProfile() {
+    setView(profileReturnView);
   }
 
   useEffect(() => {
@@ -776,7 +781,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
         {view === "messages" ? <ChatMenu user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
         {view === "services" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} /> : null}
-        {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} /> : null}
+        {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} onBack={closeProfile} /> : null}
       </section>
     </section>
   );
@@ -1264,7 +1269,7 @@ function Messages({ chatId, setChatId, user }) {
   );
 }
 
-function Profile({ user, setUser, reloadExecutors }) {
+function Profile({ user, setUser, reloadExecutors, onBack }) {
   const [draft, setDraft] = useState(user);
   const [locked, setLocked] = useState(false);
   const [executorDraft, setExecutorDraft] = useState({
@@ -1380,8 +1385,13 @@ function Profile({ user, setUser, reloadExecutors }) {
   return (
     <div className="profile-stack">
       <div className="panel profile-panel">
-        <h2 className="section-title">{user.role === "executor" ? "Профиль исполнителя" : "Профиль клиента"}</h2>
-        <p className="section-note">Эти данные можно изменить при необходимости.</p>
+        <div className="profile-heading">
+          <div>
+            <h2 className="section-title">{user.role === "executor" ? "Профиль исполнителя" : "Профиль клиента"}</h2>
+            <p className="section-note">Эти данные можно изменить при необходимости.</p>
+          </div>
+          <button className="ghost profile-back-button" type="button" onClick={onBack}>Назад</button>
+        </div>
         <form className="form" onSubmit={save}>
           <div className="two-col">
             <label className="field"><span>Имя</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>

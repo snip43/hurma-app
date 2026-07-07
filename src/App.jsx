@@ -665,6 +665,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
   const savedWorkspace = loadSaved();
   const savedChatByUser = savedWorkspace.chatByUser || {};
   const [chatId, setChatId] = useState(savedChatByUser[user.id] || "");
+  const [profileReturnView, setProfileReturnView] = useState("services");
   const [workspaceError, setWorkspaceError] = useState("");
 
   function goHome() {
@@ -685,8 +686,12 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
 
   function openProfile() {
     if (user.isGuest) return;
+    setProfileReturnView(view === "profile" ? "services" : view);
     setView("profile");
-    setChatId("");
+  }
+
+  function closeProfile() {
+    setView(profileReturnView);
   }
 
   useEffect(() => {
@@ -729,7 +734,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
         {view === "messages" ? <ChatMenu user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
         {view === "services" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} /> : null}
-        {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} /> : null}
+        {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} onBack={closeProfile} /> : null}
       </section>
     </section>
   );
@@ -1217,7 +1222,7 @@ function Messages({ chatId, setChatId, user }) {
   );
 }
 
-function Profile({ user, setUser, reloadExecutors }) {
+function Profile({ user, setUser, reloadExecutors, onBack }) {
   const [draft, setDraft] = useState(user);
   const [locked, setLocked] = useState(false);
   const [executorDraft, setExecutorDraft] = useState({
@@ -1333,8 +1338,13 @@ function Profile({ user, setUser, reloadExecutors }) {
   return (
     <div className="profile-stack">
       <div className="panel profile-panel">
-        <h2 className="section-title">{user.role === "executor" ? "Профиль исполнителя" : "Профиль клиента"}</h2>
-        <p className="section-note">Эти данные можно изменить при необходимости.</p>
+        <div className="profile-heading">
+          <div>
+            <h2 className="section-title">{user.role === "executor" ? "Профиль исполнителя" : "Профиль клиента"}</h2>
+            <p className="section-note">Эти данные можно изменить при необходимости.</p>
+          </div>
+          <button className="ghost profile-back-button" type="button" onClick={onBack}>Назад</button>
+        </div>
         <form className="form" onSubmit={save}>
           <div className="two-col">
             <label className="field"><span>Имя</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
