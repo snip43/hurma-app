@@ -65,6 +65,7 @@ const SERVICES = ["Трансфер", "Клининг", "Афиша"];
 const EVENT_TYPES = ["Все мероприятия", "Афиша", "Спорт", "Для детей"];
 const SPORTS = ["Все виды спорта", "Футбол", "Йога", "Дайвинг", "Бег", "Падел", "Волейбол", "Баскетбол"];
 const AGES = ["Любой возраст", "0+", "6+", "12+", "16+"];
+const DEFAULT_EVENT_FILTERS = { area: "Все районы", type: "Все мероприятия", sport: "Все виды спорта", age: "Любой возраст", q: "" };
 
 const EXECUTORS = [
   {
@@ -853,7 +854,7 @@ function ExecutorList({ service, user, onStartChat, databaseExecutors }) {
 }
 
 function Afisha({ user, onRequireSubscription, sourceEvents, eventsLoading, eventsError }) {
-  const [filters, setFilters] = useState({ area: "Все районы", type: "Все мероприятия", sport: "Все виды спорта", age: "Любой возраст", q: "" });
+  const [filters, setFilters] = useState(DEFAULT_EVENT_FILTERS);
   const [filterDraft, setFilterDraft] = useState(filters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [requestedIds, setRequestedIds] = useState([]);
@@ -955,7 +956,10 @@ function Afisha({ user, onRequireSubscription, sourceEvents, eventsLoading, even
                 </select>
               ) : null}
             </div>
-            <button className="primary" type="submit">Сохранить</button>
+            <div className="filter-modal-actions">
+              <button className="secondary" type="button" onClick={() => setFilterDraft(DEFAULT_EVENT_FILTERS)}>Сброс</button>
+              <button className="primary" type="submit">Сохранить</button>
+            </div>
           </form>
         </div>
       ) : null}

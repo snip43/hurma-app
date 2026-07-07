@@ -1134,6 +1134,12 @@ button {
   padding: 0;
 }
 
+.filter-modal-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
 .service-tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2147,6 +2153,10 @@ button {
 
   .filter-open-button {
     width: 100%;
+  }
+
+  .filter-modal-actions {
+    grid-template-columns: 1fr;
   }
 
   .wa-shell {
