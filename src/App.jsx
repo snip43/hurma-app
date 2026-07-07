@@ -1338,13 +1338,8 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
   return (
     <div className="profile-stack">
       <div className="panel profile-panel">
-        <div className="profile-heading">
-          <div>
-            <h2 className="section-title">{user.role === "executor" ? "Профиль исполнителя" : "Профиль клиента"}</h2>
-            <p className="section-note">Эти данные можно изменить при необходимости.</p>
-          </div>
-          <button className="ghost profile-back-button" type="button" onClick={onBack}>Назад</button>
-        </div>
+        <h2 className="section-title">{user.role === "executor" ? "Профиль исполнителя" : "Профиль клиента"}</h2>
+        <p className="section-note">Эти данные можно изменить при необходимости.</p>
         <form className="form" onSubmit={save}>
           <div className="two-col">
             <label className="field"><span>Имя</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
@@ -1352,6 +1347,7 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
           </div>
           <label className="field"><span>Район поиска</span><select value={draft.searchArea} onChange={(event) => change("searchArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
           <button className="primary" type="submit" disabled={locked}>Сохранить профиль</button>
+          <button className="ghost profile-back-button" type="button" onClick={onBack}>Назад</button>
         </form>
       </div>
 

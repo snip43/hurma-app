@@ -1371,21 +1371,8 @@ button {
   gap: 18px;
 }
 
-.profile-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.profile-heading .section-note {
-  margin-bottom: 0;
-}
-
 .profile-back-button {
-  flex: 0 0 auto;
-  padding-inline: 18px;
+  width: 100%;
 }
 
 .executor-publish-panel {
@@ -2029,7 +2016,6 @@ button {
 
   .executor-footer,
   .publish-heading,
-  .profile-heading,
   .chat-head {
     align-items: stretch;
     flex-direction: column;
