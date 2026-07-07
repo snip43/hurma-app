@@ -724,11 +724,10 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
 
   return (
     <section className={`workspace ${view === "messages" ? "workspace-chat-focus" : ""}`}>
-      {view !== "messages" ? <Nav view={view} setView={setView} /> : null}
       <section className="content">
         {workspaceError ? <div className="panel error-state">{workspaceError}</div> : null}
         {view === "messages" ? <ChatMenu user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
-        {view === "services" ? <Services user={user} service={service} setService={setService} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
+        {view === "services" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} /> : null}
         {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} /> : null}
       </section>
@@ -736,7 +735,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
   );
 }
 
-function Services({ user, service, setService, onRequireSubscription, onStartChat, events, eventsLoading, eventsError, databaseExecutors }) {
+function Services({ user, service, setService, onOpenChat, onRequireSubscription, onStartChat, events, eventsLoading, eventsError, databaseExecutors }) {
   if (!service) {
     return (
       <div className="service-tabs">
@@ -745,6 +744,9 @@ function Services({ user, service, setService, onRequireSubscription, onStartCha
             <strong>{item}</strong>
           </button>
         ))}
+        <button className="service-tab-card" type="button" onClick={onOpenChat}>
+          <strong>Чат</strong>
+        </button>
       </div>
     );
   }
