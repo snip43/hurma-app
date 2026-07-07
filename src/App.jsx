@@ -9,11 +9,11 @@ const supabaseClient = window.supabase && supabaseConfig.url && supabaseConfig.p
   : null;
 
 const CITIES = {
-  "Хургада": ["Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar", "Эль-Ахья"],
-  "Шарм-эль-Шейх": ["Naama Bay", "Hadaba", "Sharks Bay", "Nabq Bay", "Old Market", "SOHO Square"],
+  "Хургада": ["Все", "Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar", "Эль-Ахья"],
+  "Шарм-эль-Шейх": ["Все", "Naama Bay", "Hadaba", "Sharks Bay", "Nabq Bay", "Old Market", "SOHO Square"],
 };
 
-const AREA_FILTERS = ["Все районы", ...CITIES["Хургада"]];
+const AREA_FILTERS = ["Все районы", ...CITIES["Хургада"].filter((area) => area !== "Все")];
 const SERVICES = ["Трансфер", "Клининг", "Афиша"];
 const EVENT_TYPES = ["Все мероприятия", "Афиша", "Спорт", "Для детей"];
 const SPORTS = ["Все виды спорта", "Футбол", "Йога", "Дайвинг", "Бег", "Падел", "Волейбол", "Баскетбол"];
