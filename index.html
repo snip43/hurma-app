@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260707-compact-filters-chat" />
+    <link rel="stylesheet" href="styles.css?v=20260707-executor-filters" />
   </head>
   <body>
     <div id="app">
@@ -39,8 +39,8 @@
     </noscript>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/supabase-config.js"></script>
-    <script src="src/async-utils.js?v=20260707-compact-filters-chat"></script>
-    <script src="src/chat-utils.js?v=20260707-compact-filters-chat"></script>
+    <script src="src/async-utils.js?v=20260707-executor-filters"></script>
+    <script src="src/chat-utils.js?v=20260707-executor-filters"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"></script>
@@ -820,12 +820,43 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
 
 function ExecutorList({ service, user, onStartChat, databaseExecutors }) {
   const [q, setQ] = useState("");
+  const [filterDraft, setFilterDraft] = useState({ q: "" });
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const items = [...databaseExecutors, ...EXECUTORS].filter((executor) => executor.category === service && `${executor.name} ${executor.title} ${executor.area}`.toLowerCase().includes(q.toLowerCase()));
+  const openFilters = () => {
+    setFilterDraft({ q });
+    setFiltersOpen(true);
+  };
+  const saveFilters = (event) => {
+    event.preventDefault();
+    setQ(filterDraft.q);
+    setFiltersOpen(false);
+  };
   return (
     <>
-      <div className="panel searchbar">
-        <input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Поиск исполнителя" />
+      <div className="panel filter-summary">
+        <button className="primary filter-open-button" type="button" onClick={openFilters}>
+          Фильтры{q.trim() ? " · 1" : ""}
+        </button>
+        <span>{items.length} исполнителей</span>
       </div>
+      {filtersOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Фильтры исполнителей">
+          <form className="filter-modal" onSubmit={saveFilters}>
+            <div className="filter-modal-head">
+              <h2>Фильтры исполнителей</h2>
+              <button className="ghost" type="button" onClick={() => setFiltersOpen(false)}>×</button>
+            </div>
+            <div className="event-filters event-filters-dynamic">
+              <input value={filterDraft.q} onChange={(event) => setFilterDraft({ q: event.target.value })} placeholder="Поиск исполнителя" />
+            </div>
+            <div className="filter-modal-actions">
+              <button className="secondary" type="button" onClick={() => setFilterDraft({ q: "" })}>Сброс</button>
+              <button className="primary" type="submit">Сохранить</button>
+            </div>
+          </form>
+        </div>
+      ) : null}
       <div className="cards-grid">
         {items.map((executor) => (
           <article className="executor-card" key={executor.id}>

@@ -773,12 +773,43 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
 
 function ExecutorList({ service, user, onStartChat, databaseExecutors }) {
   const [q, setQ] = useState("");
+  const [filterDraft, setFilterDraft] = useState({ q: "" });
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const items = [...databaseExecutors, ...EXECUTORS].filter((executor) => executor.category === service && `${executor.name} ${executor.title} ${executor.area}`.toLowerCase().includes(q.toLowerCase()));
+  const openFilters = () => {
+    setFilterDraft({ q });
+    setFiltersOpen(true);
+  };
+  const saveFilters = (event) => {
+    event.preventDefault();
+    setQ(filterDraft.q);
+    setFiltersOpen(false);
+  };
   return (
     <>
-      <div className="panel searchbar">
-        <input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Поиск исполнителя" />
+      <div className="panel filter-summary">
+        <button className="primary filter-open-button" type="button" onClick={openFilters}>
+          Фильтры{q.trim() ? " · 1" : ""}
+        </button>
+        <span>{items.length} исполнителей</span>
       </div>
+      {filtersOpen ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Фильтры исполнителей">
+          <form className="filter-modal" onSubmit={saveFilters}>
+            <div className="filter-modal-head">
+              <h2>Фильтры исполнителей</h2>
+              <button className="ghost" type="button" onClick={() => setFiltersOpen(false)}>×</button>
+            </div>
+            <div className="event-filters event-filters-dynamic">
+              <input value={filterDraft.q} onChange={(event) => setFilterDraft({ q: event.target.value })} placeholder="Поиск исполнителя" />
+            </div>
+            <div className="filter-modal-actions">
+              <button className="secondary" type="button" onClick={() => setFilterDraft({ q: "" })}>Сброс</button>
+              <button className="primary" type="submit">Сохранить</button>
+            </div>
+          </form>
+        </div>
+      ) : null}
       <div className="cards-grid">
         {items.map((executor) => (
           <article className="executor-card" key={executor.id}>
