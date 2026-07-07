@@ -236,7 +236,13 @@ function mapDatabaseExecutor(executor) {
 async function loadSupabaseUser(authUser) {
   const [{ data: profile, error: profileError }, { data: subscription, error: subscriptionError }] = await Promise.all([
     supabaseClient.from("profiles").select("id, display_name, role, city, search_area").eq("id", authUser.id).single(),
-    supabaseClient.from("subscriptions").select("status, starts_at, ends_at, auto_renew, plan_code").eq("user_id", authUser.id).maybeSingle(),
+    supabaseClient
+      .from("subscriptions")
+      .select("status, starts_at, ends_at, auto_renew, plan_code")
+      .eq("user_id", authUser.id)
+      .order("starts_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
   if (profileError) throw profileError;
   if (subscriptionError) throw subscriptionError;
@@ -251,6 +257,23 @@ async function loadSupabaseUser(authUser) {
     subscription,
     subscriptionActive: subscriptionIsActive(subscription),
   };
+}
+
+function toUserError(error) {
+  const message = String(error?.message || error || "");
+  if (/invalid login credentials/i.test(message)) {
+    return "Неверный email или пароль. Проверьте данные и попробуйте ещё раз.";
+  }
+  if (/email not confirmed/i.test(message)) {
+    return "Email ещё не подтверждён. Откройте письмо от ХурМа и перейдите по ссылке подтверждения.";
+  }
+  if (/cannot coerce.*single json object|single json object/i.test(message)) {
+    return "Не удалось загрузить данные аккаунта. Попробуйте войти ещё раз. Если ошибка повторится, напишите администратору.";
+  }
+  if (/failed to fetch|network|timeout|timed out/i.test(message)) {
+    return "Не удалось связаться с сервером. Проверьте интернет и попробуйте ещё раз.";
+  }
+  return "Что-то пошло не так. Попробуйте ещё раз.";
 }
 
 function Header({ user, onHome, onLogout }) {
@@ -355,10 +378,24 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
   const [pending, setPending] = useState(false);
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [emailValue, setEmailValue] = useState("");
+  const [passwordValue, setPasswordValue] = useState("");
 
   useEffect(() => {
     setSearchArea(areaOptions(city)[0]);
   }, [city]);
+
+  useEffect(() => {
+    const defaultCity = Object.keys(CITIES)[0];
+    setError("");
+    setInfo("");
+    setPending(false);
+    setRecoveryMode(false);
+    setEmailValue("");
+    setPasswordValue("");
+    setRole("client");
+    setCity(defaultCity);
+    setSearchArea(areaOptions(defaultCity)[0]);
+  }, [mode]);
 
   async function submit(event) {
     event.preventDefault();
@@ -434,7 +471,7 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
           <form className="form" onSubmit={submitRecovery}>
             <label className="field">
               <span>Email</span>
-              <input type="email" value={emailValue} onChange={(event) => setEmailValue(event.target.value)} placeholder="you@example.com" required />
+              <input type="email" value={emailValue} onChange={(event) => setEmailValue(event.target.value)} placeholder="you@example.com" autoComplete="email" required />
             </label>
             <div className="error">{error}</div>
             {info ? <div className="form-info">{info}</div> : null}
@@ -455,7 +492,7 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
         </button>
         <h2 className="section-title">{mode === "login" ? "Войти в ХурМа" : "Создать аккаунт"}</h2>
         <p className="section-note">{mode === "login" ? "Выберите роль и войдите в свой кабинет." : "Зарегистрируйтесь или посмотрите сервисы без аккаунта."}</p>
-        <form className="form" onSubmit={submit}>
+        <form className="form" onSubmit={submit} key={mode}>
           <div className="role-toggle">
             <button type="button" className={`toggle-option ${role === "client" ? "active" : ""}`} onClick={() => setRole("client")}>
               Клиент
@@ -499,11 +536,11 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
           ) : null}
           <label className="field">
             <span>Email</span>
-            <input name="email" type="email" value={emailValue} onChange={(event) => setEmailValue(event.target.value)} placeholder="you@example.com" required />
+            <input name="email" type="email" value={emailValue} onChange={(event) => setEmailValue(event.target.value)} placeholder="you@example.com" autoComplete={mode === "login" ? "username" : "off"} required />
           </label>
           <label className="field">
             <span>Пароль</span>
-            <input name="password" type="password" placeholder="Минимум 6 символов" required />
+            <input name="password" type="password" value={passwordValue} onChange={(event) => setPasswordValue(event.target.value)} placeholder="Минимум 6 символов" autoComplete={mode === "login" ? "current-password" : "new-password"} required />
           </label>
           {mode === "login" ? (
             <button className="password-recovery-link" type="button" onClick={() => { setRecoveryMode(true); setError(""); setInfo(""); }}>
@@ -1447,7 +1484,7 @@ function App() {
         email: data.email,
         password: data.password,
       });
-      if (error) return { error: error.message };
+      if (error) return { error: toUserError(error) };
       try {
         const nextUser = await loadSupabaseUser(authData.user);
         if (nextUser.role !== data.role) {
@@ -1457,7 +1494,7 @@ function App() {
         setUserState(nextUser);
         saveSaved({ user: null });
       } catch (profileError) {
-        return { error: profileError.message };
+        return { error: toUserError(profileError) };
       }
       return { ok: true };
     }
@@ -1493,7 +1530,7 @@ function App() {
     if (error) {
       const message = String(error.message || "");
       if (/already|registered|exists|duplicate/i.test(message)) return { error: duplicateEmailMessage };
-      return { error: error.message };
+      return { error: toUserError(error) };
     }
     const duplicateIdentity =
       authData?.user &&
@@ -1507,7 +1544,7 @@ function App() {
       setUserState(await loadSupabaseUser(authData.user));
       saveSaved({ user: null });
     } catch (profileError) {
-      return { error: profileError.message };
+      return { error: toUserError(profileError) };
     }
     return { ok: true };
   }
@@ -1515,7 +1552,7 @@ function App() {
   async function resetPassword(email) {
     const redirectTo = `${window.location.origin}${window.location.pathname}`;
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
-    if (error) return { error: error.message };
+    if (error) return { error: toUserError(error) };
     return { info: "Если аккаунт с таким email существует, письмо со ссылкой уже отправлено. Проверьте также папку «Спам»." };
   }
 
