@@ -1689,9 +1689,9 @@ button {
 }
 
 .wa-floating-add {
-  position: fixed;
-  right: max(16px, env(safe-area-inset-right));
-  bottom: max(18px, env(safe-area-inset-bottom));
+  position: absolute;
+  right: clamp(18px, 2.4vw, 28px);
+  bottom: clamp(18px, 2.4vw, 28px);
   z-index: 20;
   display: grid;
   width: clamp(58px, 8vw, 68px);
@@ -1705,7 +1705,12 @@ button {
   font-family: inherit;
   font-size: clamp(30px, 4vw, 38px);
   font-weight: 900;
-  line-height: 1;
+  line-height: 0;
+}
+
+.wa-floating-add::before {
+  content: "+";
+  transform: translateY(-1px);
 }
 
 .wa-floating-add:hover,

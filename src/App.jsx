@@ -1279,7 +1279,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
               </div>
             </div>
           ) : null}
-          {!user.isGuest && !contactPicker ? <button className="wa-floating-add" type="button" onClick={() => setContactPicker(true)} aria-label="Добавить собеседника">+</button> : null}
+          {!user.isGuest && !contactPicker ? <button className="wa-floating-add" type="button" onClick={() => setContactPicker(true)} aria-label="Добавить собеседника"></button> : null}
         </div>
       </div>
     );
