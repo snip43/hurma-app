@@ -986,6 +986,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
   const [manualName, setManualName] = useState("");
   const [manualPhone, setManualPhone] = useState("");
   const [manualContacts, setManualContacts] = useState(() => loadSaved().manualContacts || []);
+  const [conversationFallbacks, setConversationFallbacks] = useState({});
   const [chatError, setChatError] = useState("");
   const [chatInfo, setChatInfo] = useState("");
   const [loadingChats, setLoadingChats] = useState(false);
@@ -1133,9 +1134,19 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
       other_user_id: contact.id,
     });
     if (error) {
-      setChatError(error.message);
+      setChatError(toUserError(error));
       return;
     }
+    setConversationFallbacks((items) => ({
+      ...items,
+      [data]: {
+        id: data,
+        title: contact.title,
+        subtitle: contact.subtitle || "Личная переписка",
+        readonly: false,
+        messages: [],
+      },
+    }));
     await loadConversations();
     setContactPicker(false);
     setChatId(`conversation:${data}`);
@@ -1183,17 +1194,32 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
       setChatError("Этот чат пока не подключён к базе. Выберите зарегистрированного пользователя через плюс.");
       return;
     }
-    const { error } = await supabaseClient.rpc("send_chat_message", {
-      target_conversation_id: activeConversationId,
-      message_body: text,
-    });
-    if (error) {
-      setChatError(toUserError(error));
+    if (!isSubscribed(user)) {
+      setChatError("Для отправки личных сообщений нужна активная подписка.");
       return;
     }
-    setDraft("");
-    await loadMessages(activeConversationId);
-    await loadConversations();
+    setChatError("");
+    try {
+      const { data, error } = await supabaseClient.rpc("send_chat_message", {
+        target_conversation_id: activeConversationId,
+        message_body: text,
+      });
+      if (error) {
+        setChatError(toUserError(error));
+        return;
+      }
+      setDraft("");
+      setMessages((items) => [...items, {
+        id: data || `local:${Date.now()}`,
+        text,
+        time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
+        me: true,
+      }]);
+      await loadMessages(activeConversationId);
+      await loadConversations();
+    } catch (error) {
+      setChatError(toUserError(error));
+    }
   }
 
   const databaseDialogs = conversations.map((item) => ({ ...item, chatId: `conversation:${item.id}` }));
@@ -1206,7 +1232,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
   });
   const visibleMessages = activeConversationId ? messages : (chat?.messages || []);
   const renderedChat = chat || (activeConversationId
-    ? { title: "Чат ХурМа", subtitle: "Личная переписка", readonly: false, messages: [] }
+    ? (conversationFallbacks[activeConversationId] || { title: "Собеседник", subtitle: "Личная переписка", readonly: false, messages: [] })
     : { title: "Чат ХурМа", subtitle: "Загружаем переписку", readonly: true, messages: [] });
   const canSendInCurrentChat = Boolean(activeConversationId && !renderedChat.readonly && !activeManualChat && canUseDatabaseChat);
   const readonlyText = activeManualChat
@@ -1233,7 +1259,12 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
           {loadingChats ? <div className="wa-notice">Загружаем чаты...</div> : null}
           <div className="wa-dialogs">
             {dialogs.map((item) => (
-              <button className="wa-dialog" key={item.chatId} type="button" onClick={() => setChatId(item.chatId)}>
+              <button className="wa-dialog" key={item.chatId} type="button" onClick={() => {
+                if (item.chatId.startsWith("conversation:")) {
+                  setConversationFallbacks((items) => ({ ...items, [item.id]: item }));
+                }
+                setChatId(item.chatId);
+              }}>
                 <div className="wa-avatar">{item.title.slice(0, 1)}</div>
                 <div className="wa-dialog-main">
                   <div className="wa-dialog-row">
