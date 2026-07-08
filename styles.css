@@ -1721,11 +1721,6 @@ button {
   left: 0;
 }
 
-.wa-sidebar-head h2 {
-  margin: 0;
-  font-size: 24px;
-}
-
 .wa-sidebar-head span,
 .wa-chat-title span {
   color: rgba(255, 255, 255, 0.74);
