@@ -648,11 +648,11 @@ function Nav({ view, setView }) {
   );
 }
 
-function ChatMenu({ user, onServices, onChat, onProfile }) {
+function ChatMenu({ onServices, onChat }) {
   return (
     <div className="service-tabs service-tabs-compact chat-tabs-compact">
       <button className="service-tab-card active" type="button" onClick={onChat}>
-        Чат
+        Чаты
       </button>
       <button className="service-tabs-reset" type="button" onClick={onServices}>
         Все разделы
@@ -733,7 +733,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
     <section className={`workspace ${view === "messages" ? "workspace-chat-focus" : ""}`}>
       <section className="content">
         {workspaceError ? <div className="panel error-state">{workspaceError}</div> : null}
-        {view === "messages" ? <ChatMenu user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
+        {view === "messages" ? <ChatMenu onServices={openServices} onChat={openChat} /> : null}
         {view === "services" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
         {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} onBack={closeProfile} /> : null}

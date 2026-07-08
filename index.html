@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260708-chat-compact-nav" />
+    <link rel="stylesheet" href="styles.css?v=20260708-chat-tabs-v2" />
   </head>
   <body>
     <div id="app">
@@ -39,8 +39,8 @@
     </noscript>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/supabase-config.js"></script>
-    <script src="src/async-utils.js?v=20260708-chat-compact-nav"></script>
-    <script src="src/chat-utils.js?v=20260708-chat-compact-nav"></script>
+    <script src="src/async-utils.js?v=20260708-chat-tabs-v2"></script>
+    <script src="src/chat-utils.js?v=20260708-chat-tabs-v2"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"></script>
@@ -695,11 +695,11 @@ function Nav({ view, setView }) {
   );
 }
 
-function ChatMenu({ user, onServices, onChat, onProfile }) {
+function ChatMenu({ onServices, onChat }) {
   return (
     <div className="service-tabs service-tabs-compact chat-tabs-compact">
       <button className="service-tab-card active" type="button" onClick={onChat}>
-        Чат
+        Чаты
       </button>
       <button className="service-tabs-reset" type="button" onClick={onServices}>
         Все разделы
@@ -780,7 +780,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
     <section className={`workspace ${view === "messages" ? "workspace-chat-focus" : ""}`}>
       <section className="content">
         {workspaceError ? <div className="panel error-state">{workspaceError}</div> : null}
-        {view === "messages" ? <ChatMenu user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
+        {view === "messages" ? <ChatMenu onServices={openServices} onChat={openChat} /> : null}
         {view === "services" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
         {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} onBack={closeProfile} /> : null}
