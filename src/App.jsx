@@ -19,6 +19,7 @@ const EVENT_TYPES = ["Все мероприятия", "Афиша", "Спорт"
 const SPORTS = ["Все виды спорта", "Футбол", "Йога", "Дайвинг", "Бег", "Падел", "Волейбол", "Баскетбол"];
 const AGES = ["Любой возраст", "0+", "6+", "12+", "16+"];
 const DEFAULT_EVENT_FILTERS = { area: "Все районы", type: "Все мероприятия", sport: "Все виды спорта", age: "Любой возраст", q: "" };
+const CHAT_LOAD_TIMEOUT_MS = 8000;
 
 const EXECUTORS = [
   {
@@ -1010,50 +1011,62 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
       return;
     }
     setLoadingChats(true);
-    const { data, error } = await supabaseClient
-      .from("conversation_members")
-      .select("conversation_id, conversations(id, conversation_type, title, subtitle, is_readonly, updated_at)")
-      .eq("user_id", user.id);
-    if (error) {
-      setChatError(error.message);
+    try {
+      const { data, error } = await withTimeout(
+        supabaseClient
+          .from("conversation_members")
+          .select("conversation_id, conversations(id, conversation_type, title, subtitle, is_readonly, updated_at)")
+          .eq("user_id", user.id),
+        CHAT_LOAD_TIMEOUT_MS,
+        "Чаты загружаются слишком долго. Показываем доступные чаты, попробуйте обновить позже."
+      );
+      if (error) throw error;
+      const conversationIds = data.map((item) => item.conversation_id);
+      if (!conversationIds.length) {
+        setConversations([]);
+        return;
+      }
+      const [membersResult, messagesResult] = await withTimeout(
+        Promise.all([
+          supabaseClient
+            .from("conversation_members")
+            .select("conversation_id, user_id, profiles(id, display_name, role, city, search_area)")
+            .in("conversation_id", conversationIds),
+          supabaseClient
+            .from("messages")
+            .select("conversation_id, body, created_at")
+            .in("conversation_id", conversationIds)
+            .order("created_at", { ascending: false }),
+        ]),
+        CHAT_LOAD_TIMEOUT_MS,
+        "Чаты загружаются слишком долго. Показываем доступные чаты, попробуйте обновить позже."
+      );
+      if (membersResult.error) throw membersResult.error;
+      if (messagesResult.error) throw messagesResult.error;
+      const memberRows = membersResult.data || [];
+      const messageRows = messagesResult.data || [];
+      const mapped = data.map((item) => {
+        const conversation = item.conversations;
+        const members = memberRows.filter((member) => member.conversation_id === item.conversation_id);
+        const otherMember = members.find((member) => member.user_id !== user.id);
+        const profile = otherMember?.profiles;
+        const lastMessage = messageRows.find((message) => message.conversation_id === item.conversation_id);
+        const isDirect = conversation.conversation_type === "direct";
+        return {
+          id: conversation.id,
+          title: isDirect ? (profile?.display_name || "Собеседник") : (conversation.title || "Чат ХурМа"),
+          subtitle: isDirect ? [profile?.role === "executor" ? "Исполнитель" : "Клиент", profile?.city, profile?.search_area].filter(Boolean).join(" · ") : (conversation.subtitle || "Групповой чат"),
+          readonly: conversation.is_readonly,
+          preview: lastMessage?.body || "Сообщений пока нет",
+          time: lastMessage ? formatEventDate(lastMessage.created_at) : "",
+        };
+      });
+      setConversations(mapped);
+    } catch (error) {
+      setChatError(toUserError(error));
+    } finally {
       setLoadingChats(false);
-      return;
     }
-    const conversationIds = data.map((item) => item.conversation_id);
-    if (!conversationIds.length) {
-      setConversations([]);
-      setLoadingChats(false);
-      return;
-    }
-    const [{ data: memberRows }, { data: messageRows }] = await Promise.all([
-      supabaseClient
-        .from("conversation_members")
-        .select("conversation_id, user_id, profiles(id, display_name, role, city, search_area)")
-        .in("conversation_id", conversationIds),
-      supabaseClient
-        .from("messages")
-        .select("conversation_id, body, created_at")
-        .in("conversation_id", conversationIds)
-        .order("created_at", { ascending: false }),
-    ]);
-    const mapped = data.map((item) => {
-      const conversation = item.conversations;
-      const members = (memberRows || []).filter((member) => member.conversation_id === item.conversation_id);
-      const otherMember = members.find((member) => member.user_id !== user.id);
-      const profile = otherMember?.profiles;
-      const lastMessage = (messageRows || []).find((message) => message.conversation_id === item.conversation_id);
-      const isDirect = conversation.conversation_type === "direct";
-      return {
-        id: conversation.id,
-        title: isDirect ? (profile?.display_name || "Собеседник") : (conversation.title || "Чат ХурМа"),
-        subtitle: isDirect ? [profile?.role === "executor" ? "Исполнитель" : "Клиент", profile?.city, profile?.search_area].filter(Boolean).join(" · ") : (conversation.subtitle || "Групповой чат"),
-        readonly: conversation.is_readonly,
-        preview: lastMessage?.body || "Сообщений пока нет",
-        time: lastMessage ? formatEventDate(lastMessage.created_at) : "",
-      };
-    });
-    setConversations(mapped);
-    setLoadingChats(false);
   }
 
   async function loadContacts() {
