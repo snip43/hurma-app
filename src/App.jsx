@@ -648,16 +648,13 @@ function Nav({ view, setView }) {
   );
 }
 
-function ChatMenu({ user, onServices, onChat, onProfile, compact = false }) {
+function ChatMenu({ user, onServices, onChat, onProfile }) {
   return (
-    <details className={`chat-menu ${compact ? "chat-menu-inline" : ""}`}>
-      <summary aria-label="Меню разделов">☰</summary>
-      <div className="chat-menu-list">
-        <button type="button" onClick={onServices}>Сервисы</button>
-        <button type="button" onClick={onChat}>Чат</button>
-        {!user.isGuest ? <button type="button" onClick={onProfile}>Профиль</button> : null}
-      </div>
-    </details>
+    <div className="chat-nav-cards">
+      <button className="service-tab-card" type="button" onClick={onServices}><strong>Сервисы</strong></button>
+      <button className="service-tab-card active" type="button" onClick={onChat}><strong>Чат</strong></button>
+      {!user.isGuest ? <button className="service-tab-card" type="button" onClick={onProfile}><strong>Профиль</strong></button> : null}
+    </div>
   );
 }
 
@@ -733,6 +730,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
     <section className={`workspace ${view === "messages" ? "workspace-chat-focus" : ""}`}>
       <section className="content">
         {workspaceError ? <div className="panel error-state">{workspaceError}</div> : null}
+        {view === "messages" ? <ChatMenu user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
         {view === "services" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
         {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} onBack={closeProfile} /> : null}
@@ -1224,7 +1222,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
       <div className="wa-shell wa-list-only">
         <div className="wa-sidebar wa-sidebar-full">
           <div className="wa-sidebar-head">
-            <ChatMenu user={user} onServices={onServices} onChat={onChat} onProfile={onProfile} compact />
+            <div className="wa-head-spacer" />
             {!user.isGuest ? <button className="wa-icon-button" type="button" onClick={() => setContactPicker(true)} aria-label="Добавить собеседника">+</button> : null}
           </div>
           <div className="wa-search">Поиск или новый чат</div>

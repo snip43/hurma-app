@@ -906,70 +906,14 @@ button {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.chat-menu {
-  position: relative;
-  justify-self: start;
-  z-index: 3;
-}
-
-.chat-menu summary {
-  display: inline-grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border: 1px solid rgba(8, 122, 119, 0.2);
-  border-radius: 8px;
-  color: var(--brand-dark);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 10px 22px rgba(33, 79, 73, 0.12);
-  cursor: pointer;
-  font-size: 24px;
-  font-weight: 900;
-  list-style: none;
-}
-
-.chat-menu summary::-webkit-details-marker {
-  display: none;
-}
-
-.chat-menu-list {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
+.chat-nav-cards {
   display: grid;
-  min-width: 190px;
-  padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 18px 34px rgba(33, 79, 73, 0.16);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.chat-menu-list button {
-  min-height: 42px;
-  border: 0;
-  border-radius: 8px;
-  color: var(--brand-dark);
-  background: transparent;
-  text-align: left;
-  font-weight: 900;
-}
-
-.chat-menu-list button:hover,
-.chat-menu-list button:focus-visible {
-  background: #e8f0eb;
-  outline: none;
-}
-
-.chat-menu-inline {
-  justify-self: auto;
-}
-
-.chat-menu-inline summary {
-  border-color: rgba(255, 255, 255, 0.24);
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: none;
+.chat-nav-cards .service-tab-card {
+  min-height: 58px;
 }
 
 .sidebar {
@@ -1146,7 +1090,8 @@ button {
   gap: 10px;
 }
 
-.service-tabs button {
+.service-tabs button,
+.chat-nav-cards .service-tab-card {
   display: grid;
   align-content: center;
   justify-items: center;
@@ -1180,11 +1125,17 @@ button {
   font-weight: 700;
 }
 
-.service-tabs button.active {
+.service-tabs button.active,
+.chat-nav-cards .service-tab-card.active {
   color: #fff;
   border-color: transparent;
   background: linear-gradient(135deg, var(--amber), var(--sea) 55%, var(--deep-sea));
   box-shadow: 0 18px 42px rgba(8, 122, 119, 0.22);
+}
+
+.chat-nav-cards .service-tab-card {
+  min-height: 58px;
+  padding: 14px 18px;
 }
 
 .service-tabs-compact {
@@ -1717,14 +1668,14 @@ button {
   justify-content: space-between;
 }
 
-.wa-sidebar-head .chat-menu-list {
-  left: 0;
-}
-
 .wa-sidebar-head span,
 .wa-chat-title span {
   color: rgba(255, 255, 255, 0.74);
   font-size: 13px;
+}
+
+.wa-head-spacer {
+  flex: 1 1 auto;
 }
 
 .wa-icon-button,
@@ -2129,6 +2080,7 @@ button {
   .cards-grid,
   .event-grid,
   .service-tabs,
+  .chat-nav-cards,
   .two-col,
   .nav,
   .chat-input {
