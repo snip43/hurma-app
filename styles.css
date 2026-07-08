@@ -906,16 +906,6 @@ button {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.chat-nav-cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.chat-nav-cards .service-tab-card {
-  min-height: 58px;
-}
-
 .sidebar {
   position: sticky;
   top: 92px;
@@ -1090,8 +1080,7 @@ button {
   gap: 10px;
 }
 
-.service-tabs button,
-.chat-nav-cards .service-tab-card {
+.service-tabs button {
   display: grid;
   align-content: center;
   justify-items: center;
@@ -1125,17 +1114,11 @@ button {
   font-weight: 700;
 }
 
-.service-tabs button.active,
-.chat-nav-cards .service-tab-card.active {
+.service-tabs button.active {
   color: #fff;
   border-color: transparent;
   background: linear-gradient(135deg, var(--amber), var(--sea) 55%, var(--deep-sea));
   box-shadow: 0 18px 42px rgba(8, 122, 119, 0.22);
-}
-
-.chat-nav-cards .service-tab-card {
-  min-height: 58px;
-  padding: 14px 18px;
 }
 
 .service-tabs-compact {
@@ -1154,6 +1137,14 @@ button {
   border-color: var(--line);
   background: rgba(255, 255, 255, 0.9);
   box-shadow: none;
+}
+
+.chat-tabs-compact {
+  margin-bottom: 8px;
+}
+
+.chat-tabs-compact .service-tab-card {
+  min-height: 58px;
 }
 
 .cards-grid {
@@ -1798,11 +1789,37 @@ button {
 
 .wa-chat {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   min-width: 0;
   background:
     linear-gradient(rgba(244, 239, 228, 0.92), rgba(244, 239, 228, 0.92)),
     radial-gradient(circle at 20% 20%, rgba(37, 211, 102, 0.12), transparent 28rem);
+}
+
+.wa-contact-strip {
+  display: grid;
+  gap: 4px;
+  margin: 12px 16px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(8, 122, 119, 0.18);
+  border-radius: 8px;
+  color: var(--brand-dark);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.94), rgba(234, 214, 155, 0.22));
+  box-shadow: 0 14px 30px rgba(42, 45, 40, 0.08);
+}
+
+.wa-contact-strip strong,
+.wa-contact-strip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wa-contact-strip span {
+  color: #6d7069;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .wa-chat-title {
@@ -2080,7 +2097,6 @@ button {
   .cards-grid,
   .event-grid,
   .service-tabs,
-  .chat-nav-cards,
   .two-col,
   .nav,
   .chat-input {

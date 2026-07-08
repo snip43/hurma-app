@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260708-chat-nav-cards" />
+    <link rel="stylesheet" href="styles.css?v=20260708-chat-compact-nav" />
   </head>
   <body>
     <div id="app">
@@ -39,8 +39,8 @@
     </noscript>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/supabase-config.js"></script>
-    <script src="src/async-utils.js?v=20260708-chat-nav-cards"></script>
-    <script src="src/chat-utils.js?v=20260708-chat-nav-cards"></script>
+    <script src="src/async-utils.js?v=20260708-chat-compact-nav"></script>
+    <script src="src/chat-utils.js?v=20260708-chat-compact-nav"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"></script>
@@ -697,10 +697,13 @@ function Nav({ view, setView }) {
 
 function ChatMenu({ user, onServices, onChat, onProfile }) {
   return (
-    <div className="chat-nav-cards">
-      <button className="service-tab-card" type="button" onClick={onServices}><strong>Сервисы</strong></button>
-      <button className="service-tab-card active" type="button" onClick={onChat}><strong>Чат</strong></button>
-      {!user.isGuest ? <button className="service-tab-card" type="button" onClick={onProfile}><strong>Профиль</strong></button> : null}
+    <div className="service-tabs service-tabs-compact chat-tabs-compact">
+      <button className="service-tab-card active" type="button" onClick={onChat}>
+        Чат
+      </button>
+      <button className="service-tabs-reset" type="button" onClick={onServices}>
+        Все разделы
+      </button>
     </div>
   );
 }
@@ -1331,7 +1334,10 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
         <div className="wa-chat-head">
           <button className="wa-mobile-back" type="button" onClick={() => setChatId("")}>←</button>
           <div className="wa-avatar">{renderedChat.title.slice(0, 1)}</div>
-          <div className="wa-chat-title"><strong>{renderedChat.title}</strong><span>{renderedChat.subtitle}</span></div>
+        </div>
+        <div className="wa-contact-strip">
+          <strong>{renderedChat.title}</strong>
+          <span>{renderedChat.subtitle}</span>
         </div>
         <div className="wa-messages">
           {chatInfo ? <div className="wa-notice">{chatInfo}</div> : null}

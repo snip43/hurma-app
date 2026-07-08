@@ -650,10 +650,13 @@ function Nav({ view, setView }) {
 
 function ChatMenu({ user, onServices, onChat, onProfile }) {
   return (
-    <div className="chat-nav-cards">
-      <button className="service-tab-card" type="button" onClick={onServices}><strong>Сервисы</strong></button>
-      <button className="service-tab-card active" type="button" onClick={onChat}><strong>Чат</strong></button>
-      {!user.isGuest ? <button className="service-tab-card" type="button" onClick={onProfile}><strong>Профиль</strong></button> : null}
+    <div className="service-tabs service-tabs-compact chat-tabs-compact">
+      <button className="service-tab-card active" type="button" onClick={onChat}>
+        Чат
+      </button>
+      <button className="service-tabs-reset" type="button" onClick={onServices}>
+        Все разделы
+      </button>
     </div>
   );
 }
@@ -1284,7 +1287,10 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
         <div className="wa-chat-head">
           <button className="wa-mobile-back" type="button" onClick={() => setChatId("")}>←</button>
           <div className="wa-avatar">{renderedChat.title.slice(0, 1)}</div>
-          <div className="wa-chat-title"><strong>{renderedChat.title}</strong><span>{renderedChat.subtitle}</span></div>
+        </div>
+        <div className="wa-contact-strip">
+          <strong>{renderedChat.title}</strong>
+          <span>{renderedChat.subtitle}</span>
         </div>
         <div className="wa-messages">
           {chatInfo ? <div className="wa-notice">{chatInfo}</div> : null}
