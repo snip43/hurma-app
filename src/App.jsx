@@ -1287,10 +1287,10 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
         <div className="wa-chat-head">
           <button className="wa-mobile-back" type="button" onClick={() => setChatId("")}>←</button>
           <div className="wa-avatar">{renderedChat.title.slice(0, 1)}</div>
-        </div>
-        <div className="wa-contact-strip">
-          <strong>{renderedChat.title}</strong>
-          <span>{renderedChat.subtitle}</span>
+          <div className="wa-chat-title">
+            <strong>{renderedChat.title}</strong>
+            <span>{renderedChat.subtitle}</span>
+          </div>
         </div>
         <div className="wa-messages">
           {chatInfo ? <div className="wa-notice">{chatInfo}</div> : null}
