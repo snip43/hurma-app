@@ -1621,6 +1621,7 @@ button {
 }
 
 .wa-shell {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   min-height: 680px;
@@ -1686,8 +1687,35 @@ button {
   font-weight: 900;
 }
 
+.wa-floating-add {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 20;
+  display: grid;
+  width: clamp(58px, 8vw, 68px);
+  height: clamp(58px, 8vw, 68px);
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.56);
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(145deg, #25d366, #0b8f8b 56%, #075e54);
+  box-shadow: 0 18px 38px rgba(7, 94, 84, 0.28);
+  font-family: inherit;
+  font-size: clamp(30px, 4vw, 38px);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.wa-floating-add:hover,
+.wa-floating-add:focus-visible {
+  transform: translateY(-1px);
+  box-shadow: 0 22px 44px rgba(7, 94, 84, 0.34);
+  outline: none;
+}
+
 .wa-search {
-  margin: 12px;
+  margin: 16px 12px 12px;
   min-height: 42px;
   padding: 11px 14px;
   border-radius: 999px;
@@ -1715,6 +1743,10 @@ button {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+}
+
+.wa-list-only .wa-dialogs {
+  padding-bottom: 96px;
 }
 
 .wa-dialog {
