@@ -1246,7 +1246,8 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
             ))}
           </div>
           {contactPicker ? (
-            <div className="contact-panel">
+            <div className="modal-backdrop contact-modal-backdrop" role="dialog" aria-modal="true" aria-label="Добавить собеседника">
+              <div className="contact-panel">
               <div className="contact-panel-head">
                 <strong>Добавить собеседника</strong>
                 <button type="button" onClick={() => setContactPicker(false)}>×</button>
@@ -1275,8 +1276,10 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
                   </button>
                 ))}
               </div>
+              </div>
             </div>
           ) : null}
+          {!user.isGuest && !contactPicker ? <button className="wa-floating-add" type="button" onClick={() => setContactPicker(true)} aria-label="Добавить собеседника">+</button> : null}
         </div>
       </div>
     );

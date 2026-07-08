@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260708-chat-title-head" />
+    <link rel="stylesheet" href="styles.css?v=20260708-contact-modal" />
   </head>
   <body>
     <div id="app">
@@ -39,8 +39,8 @@
     </noscript>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/supabase-config.js"></script>
-    <script src="src/async-utils.js?v=20260708-chat-title-head"></script>
-    <script src="src/chat-utils.js?v=20260708-chat-title-head"></script>
+    <script src="src/async-utils.js?v=20260708-contact-modal"></script>
+    <script src="src/chat-utils.js?v=20260708-contact-modal"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"></script>
@@ -1289,7 +1289,8 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
             ))}
           </div>
           {contactPicker ? (
-            <div className="contact-panel">
+            <div className="modal-backdrop contact-modal-backdrop" role="dialog" aria-modal="true" aria-label="Добавить собеседника">
+              <div className="contact-panel">
               <div className="contact-panel-head">
                 <strong>Добавить собеседника</strong>
                 <button type="button" onClick={() => setContactPicker(false)}>×</button>
@@ -1317,6 +1318,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
                     </div>
                   </button>
                 ))}
+              </div>
               </div>
             </div>
           ) : null}

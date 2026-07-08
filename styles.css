@@ -1968,12 +1968,21 @@ button {
 .contact-panel {
   display: grid;
   gap: 10px;
-  margin: 0 12px 12px;
+  width: min(520px, 100%);
+  max-height: min(720px, calc(100svh - 40px));
+  margin: 0;
   padding: 12px;
   border: 1px solid rgba(8, 122, 119, 0.18);
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 12px 30px rgba(32, 33, 36, 0.12);
+  overflow: hidden;
+}
+
+.contact-modal-backdrop {
+  align-items: center;
+  justify-items: center;
+  padding: clamp(12px, 4vw, 24px);
 }
 
 .contact-panel-head {
@@ -2029,7 +2038,7 @@ button {
 
 .contact-list {
   display: grid;
-  max-height: 260px;
+  max-height: min(300px, 34svh);
   overflow: auto;
 }
 
@@ -2170,6 +2179,10 @@ button {
   }
 
   .filter-modal-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-actions {
     grid-template-columns: 1fr;
   }
 
