@@ -1126,20 +1126,21 @@ button {
 
 .service-tabs-compact {
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: stretch;
 }
 
 .service-tabs-compact button {
-  min-height: 48px;
+  min-height: 58px;
 }
 
 .service-tabs-compact .service-tabs-reset {
+  align-self: stretch;
   min-width: 132px;
   padding: 0 16px;
   color: var(--brand-dark);
   border-color: var(--line);
   background: rgba(255, 255, 255, 0.9);
-  box-shadow: none;
+  box-shadow: 0 14px 34px rgba(42, 45, 40, 0.08);
 }
 
 .chat-tabs-compact {
