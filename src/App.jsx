@@ -657,12 +657,11 @@ function Nav({ view, setView }) {
 
 function ChatMenu({ onServices, onChat }) {
   return (
-    <div className="service-tabs service-tabs-compact chat-tabs-compact">
-      <button className="service-tab-card active" type="button" onClick={onChat}>
-        <span className="service-tab-icon" aria-hidden="true">{SERVICE_ICONS["Чаты"]}</span>
-        <strong>Чаты</strong>
+    <div className="section-switch chat-tabs-compact">
+      <button className="section-switch-icon active" type="button" onClick={onChat} aria-label="Чаты">
+        <span className="section-switch-symbol" aria-hidden="true">{SERVICE_ICONS["Чаты"]}</span>
       </button>
-      <button className="service-tabs-reset" type="button" onClick={onServices}>
+      <button className="section-switch-all" type="button" onClick={onServices}>
         Все разделы
       </button>
     </div>
@@ -786,12 +785,11 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
 
   return (
     <>
-      <div className="service-tabs service-tabs-compact">
-        <button className="service-tab-card active" type="button">
-          <span className="service-tab-icon" aria-hidden="true">{SERVICE_ICONS[service]}</span>
-          <strong>{service}</strong>
+      <div className="section-switch">
+        <button className="section-switch-icon active" type="button" aria-label={service}>
+          <span className="section-switch-symbol" aria-hidden="true">{SERVICE_ICONS[service]}</span>
         </button>
-        <button className="service-tabs-reset" type="button" onClick={showAllSections}>
+        <button className="section-switch-all" type="button" onClick={showAllSections}>
           Все разделы
         </button>
       </div>
@@ -1133,6 +1131,9 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   useEffect(() => {
     loadConversations();
     loadContacts();
+    if (!canUseDatabaseChat) return undefined;
+    const refreshId = window.setInterval(loadConversations, 5000);
+    return () => window.clearInterval(refreshId);
   }, [user && user.id]);
 
   useEffect(() => {
@@ -1142,6 +1143,12 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     if (activeConversationId) loadMessages(activeConversationId);
     else setMessages([]);
   }, [chatId]);
+
+  useEffect(() => {
+    if (!activeConversationId || !canUseDatabaseChat) return undefined;
+    const refreshId = window.setInterval(() => loadMessages(activeConversationId), 3000);
+    return () => window.clearInterval(refreshId);
+  }, [activeConversationId, canUseDatabaseChat]);
 
   useEffect(() => {
     if (!activeConversationId || loadingChats) return;
@@ -1277,6 +1284,13 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     }
   }
 
+  function submitDraftFromKeyboard(event) {
+    if (event.key !== "Enter") return;
+    if (event.shiftKey) return;
+    event.preventDefault();
+    event.currentTarget.form?.requestSubmit();
+  }
+
   const databaseDialogs = conversations.map((item) => ({ ...item, chatId: `conversation:${item.id}` }));
   const manualDialogs = manualContacts.map((item) => ({ ...item, chatId: item.id, preview: item.subtitle, readonly: true }));
   const staticDialogs = COMMUNITY_CHATS.map((item) => ({ ...item, chatId: item.id, preview: item.subtitle }));
@@ -1391,7 +1405,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
             </div>
           )) : <div className="wa-empty"><strong>Сообщений пока нет</strong><span>{emptyText}</span></div>}
         </div>
-        {canSendInCurrentChat ? <form className="wa-input" onSubmit={sendMessage}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Напишите сообщение..." /><button type="submit">Отправить</button></form> : <div className="wa-readonly">{readonlyText}</div>}
+        {canSendInCurrentChat ? <form className="wa-input" onSubmit={sendMessage}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={submitDraftFromKeyboard} placeholder="Напишите сообщение..." /><button type="submit">Отправить</button></form> : <div className="wa-readonly">{readonlyText}</div>}
       </section>
     </div>
   );
