@@ -743,6 +743,11 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
 }
 
 function Services({ user, service, setService, onOpenChat, onRequireSubscription, onStartChat, events, eventsLoading, eventsError, databaseExecutors }) {
+  function showAllSections(event) {
+    event.currentTarget.blur();
+    setService("");
+  }
+
   if (!service) {
     return (
       <div className="service-tabs">
@@ -764,7 +769,7 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
         <button className="service-tab-card active" type="button">
           {service}
         </button>
-        <button className="service-tabs-reset" type="button" onClick={() => setService("")}>
+        <button className="service-tabs-reset" type="button" onClick={showAllSections}>
           Все сервисы
         </button>
       </div>
