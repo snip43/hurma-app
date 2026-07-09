@@ -1149,7 +1149,7 @@ button {
 }
 
 .service-tabs-compact {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: clamp(58px, 6vw, 70px) minmax(0, 1fr);
   align-items: stretch;
 }
 
@@ -1157,12 +1157,34 @@ button {
   min-height: 58px;
 }
 
+.service-tabs-compact .service-tab-card {
+  gap: 0;
+  padding: 8px;
+}
+
+.service-tabs-compact .service-tab-card .service-tab-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  font-size: 22px;
+}
+
+.service-tabs-compact .service-tab-card strong {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .service-tabs-compact .service-tabs-reset {
   grid-template-columns: 1fr;
   justify-items: center;
   text-align: center;
   align-self: stretch;
-  min-width: clamp(108px, 10vw, 124px);
+  width: 100%;
+  min-width: 0;
   padding: 0 clamp(10px, 1.4vw, 14px);
   color: var(--brand-dark);
   border-color: var(--line);
@@ -1172,10 +1194,6 @@ button {
 
 .chat-tabs-compact {
   margin-bottom: 8px;
-}
-
-.chat-tabs-compact .service-tab-card {
-  min-height: 58px;
 }
 
 .cards-grid {
@@ -2215,12 +2233,12 @@ button {
   }
 
   .service-tabs-compact {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 56px minmax(0, 1fr);
   }
 
   .service-tabs-compact .service-tabs-reset {
-    justify-self: center;
-    width: min(78%, 240px);
+    justify-self: stretch;
+    width: 100%;
   }
 
   .event-actions {
