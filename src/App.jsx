@@ -661,8 +661,8 @@ function ChatMenu({ onServices, onChat }) {
       <button className="section-switch-icon active" type="button" onClick={onChat} aria-label="Чаты">
         <span className="section-switch-symbol" aria-hidden="true">{SERVICE_ICONS["Чаты"]}</span>
       </button>
-      <button className="section-switch-all" type="button" onClick={onServices}>
-        Все разделы
+      <button className="section-switch-all" type="button" onClick={onServices} aria-label="Все разделы">
+        <span className="section-switch-symbol" aria-hidden="true">☰</span>
       </button>
     </div>
   );
@@ -789,8 +789,8 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
         <button className="section-switch-icon active" type="button" aria-label={service}>
           <span className="section-switch-symbol" aria-hidden="true">{SERVICE_ICONS[service]}</span>
         </button>
-        <button className="section-switch-all" type="button" onClick={showAllSections}>
-          Все разделы
+        <button className="section-switch-all" type="button" onClick={showAllSections} aria-label="Все разделы">
+          <span className="section-switch-symbol" aria-hidden="true">☰</span>
         </button>
       </div>
       {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} sourceEvents={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : <ExecutorList service={service} user={user} onStartChat={onStartChat} databaseExecutors={databaseExecutors} />}
@@ -1054,25 +1054,29 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
         setConversations([]);
         return;
       }
-      const [membersResult, messagesResult] = await withTimeout(
+      const [membersResult, messageResults] = await withTimeout(
         Promise.all([
           supabaseClient
             .from("conversation_members")
             .select("conversation_id, user_id, profiles(id, display_name, role, city, search_area)")
             .in("conversation_id", conversationIds),
-          supabaseClient
-            .from("messages")
-            .select("conversation_id, body, created_at")
-            .in("conversation_id", conversationIds)
-            .order("created_at", { ascending: false }),
+          Promise.all(conversationIds.map(async (conversationId) => {
+            const result = await supabaseClient.rpc("get_chat_messages", {
+              target_conversation_id: conversationId,
+            });
+            return { conversationId, ...result };
+          })),
         ]),
         CHAT_LOAD_TIMEOUT_MS,
         "Чаты загружаются слишком долго. Показываем доступные чаты, попробуйте обновить позже."
       );
       if (membersResult.error) throw membersResult.error;
-      if (messagesResult.error) throw messagesResult.error;
+      const failedMessagesResult = messageResults.find((result) => result.error);
+      if (failedMessagesResult) throw failedMessagesResult.error;
       const memberRows = membersResult.data || [];
-      const messageRows = messagesResult.data || [];
+      const messageRows = messageResults
+        .flatMap(({ conversationId, data: rows = [] }) => rows.map((message) => ({ ...message, conversation_id: conversationId })))
+        .sort((first, second) => new Date(second.created_at) - new Date(first.created_at));
       const mapped = data.map((item) => {
         const conversation = item.conversations;
         const members = memberRows.filter((member) => member.conversation_id === item.conversation_id);
@@ -1115,11 +1119,9 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     if (!conversationId || !canUseDatabaseChat) return;
     const loadId = messageLoadRef.current + 1;
     messageLoadRef.current = loadId;
-    const { data, error } = await supabaseClient
-      .from("messages")
-      .select("id, sender_id, body, created_at")
-      .eq("conversation_id", conversationId)
-      .order("created_at", { ascending: true });
+    const { data, error } = await supabaseClient.rpc("get_chat_messages", {
+      target_conversation_id: conversationId,
+    });
     if (loadId !== messageLoadRef.current) return;
     if (error) {
       setChatError(error.message);
