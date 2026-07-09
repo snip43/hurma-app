@@ -1730,6 +1730,11 @@ button {
   grid-template-columns: 1fr;
 }
 
+.wa-shell.wa-chat-only {
+  min-height: clamp(430px, 68svh, 760px);
+  height: calc(100svh - clamp(180px, 22svh, 260px));
+}
+
 .wa-sidebar-full {
   border-right: 0;
 }
@@ -1923,6 +1928,7 @@ button {
 .wa-chat {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
   min-width: 0;
   background:
     linear-gradient(rgba(244, 239, 228, 0.92), rgba(244, 239, 228, 0.92)),
@@ -1976,6 +1982,7 @@ button {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
   overflow: auto;
   padding: 20px clamp(14px, 3vw, 42px);
 }
@@ -2006,11 +2013,15 @@ button {
 
 .wa-input {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) clamp(46px, 7vw, 54px);
+  align-items: center;
   gap: 10px;
   padding: 12px;
   border-top: 1px solid #d8d2c4;
   background: #f0f2f1;
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
 }
 
 .wa-input textarea {
@@ -2028,13 +2039,18 @@ button {
 }
 
 .wa-input button {
+  display: grid;
+  place-items: center;
+  width: clamp(46px, 7vw, 54px);
   min-height: 48px;
-  padding: 0 18px;
+  padding: 0;
   border: 0;
   border-radius: 999px;
   color: #fff;
   background: #128c7e;
+  font-size: 22px;
   font-weight: 900;
+  line-height: 1;
 }
 
 .wa-readonly {
@@ -2329,10 +2345,6 @@ button {
 
   .wa-bubble {
     max-width: 88%;
-  }
-
-  .wa-input {
-    grid-template-columns: 1fr;
   }
 
   .auth-screen .intro {

@@ -1016,6 +1016,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   const [chatInfo, setChatInfo] = useState("");
   const [loadingChats, setLoadingChats] = useState(false);
   const messageLoadRef = useRef(0);
+  const messagesListRef = useRef(null);
   const activeConversationId = chatId.startsWith("conversation:") ? chatId.replace("conversation:", "") : "";
   const executorId = chatId.startsWith("executor:") ? chatId.replace("executor:", "") : "";
   const executor = EXECUTORS.find((item) => item.id === executorId);
@@ -1145,6 +1146,12 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     if (activeConversationId) loadMessages(activeConversationId);
     else setMessages([]);
   }, [chatId]);
+
+  useEffect(() => {
+    const list = messagesListRef.current;
+    if (!list) return;
+    list.scrollTop = list.scrollHeight;
+  }, [chatId, messages.length]);
 
   useEffect(() => {
     if (!activeConversationId || !canUseDatabaseChat) return undefined;
@@ -1397,7 +1404,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
             <span>{renderedChat.subtitle}</span>
           </div>
         </div>
-        <div className="wa-messages">
+        <div className="wa-messages" ref={messagesListRef}>
           {chatInfo ? <div className="wa-notice">{chatInfo}</div> : null}
           {chatError ? <div className="wa-notice error">{chatError}</div> : null}
           {visibleMessages.length ? visibleMessages.map((message, index) => (
@@ -1407,7 +1414,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
             </div>
           )) : <div className="wa-empty"><strong>Сообщений пока нет</strong><span>{emptyText}</span></div>}
         </div>
-        {canSendInCurrentChat ? <form className="wa-input" onSubmit={sendMessage}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={submitDraftFromKeyboard} placeholder="Напишите сообщение..." /><button type="submit">Отправить</button></form> : <div className="wa-readonly">{readonlyText}</div>}
+        {canSendInCurrentChat ? <form className="wa-input" onSubmit={sendMessage}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={submitDraftFromKeyboard} placeholder="Напишите сообщение..." /><button type="submit" aria-label="Отправить сообщение">➤</button></form> : <div className="wa-readonly">{readonlyText}</div>}
       </section>
     </div>
   );
