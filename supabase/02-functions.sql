@@ -198,15 +198,15 @@ create or replace function public.send_chat_message(
   target_conversation_id uuid,
   message_body text
 )
-returns uuid
+returns jsonb
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
   current_user_id uuid := (select auth.uid());
-  new_message_id uuid;
   clean_body text := nullif(trim(message_body), '');
+  inserted_message public.messages%rowtype;
 begin
   if current_user_id is null then
     raise exception 'Authentication required';
@@ -230,13 +230,19 @@ begin
 
   insert into public.messages (conversation_id, sender_id, body)
   values (target_conversation_id, current_user_id, clean_body)
-  returning id into new_message_id;
+  returning * into inserted_message;
 
   update public.conversations
-  set updated_at = now()
+  set updated_at = inserted_message.created_at
   where id = target_conversation_id;
 
-  return new_message_id;
+  return jsonb_build_object(
+    'id', inserted_message.id,
+    'conversation_id', inserted_message.conversation_id,
+    'sender_id', inserted_message.sender_id,
+    'body', inserted_message.body,
+    'created_at', inserted_message.created_at
+  );
 end;
 $$;
 

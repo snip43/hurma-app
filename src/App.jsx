@@ -1,6 +1,6 @@
 const { useEffect, useMemo, useRef, useState } = React;
 const { withTimeout } = window.HurmaAsync;
-const { normalizeContact, buildManualContact } = window.HurmaChatUtils;
+const { normalizeContact, buildManualContact, normalizeChatMessage, upsertChatMessage } = window.HurmaChatUtils;
 
 const STORAGE_KEY = "hurma-react-state-v1";
 const supabaseConfig = window.HURMA_SUPABASE || {};
@@ -675,6 +675,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
   const savedWorkspace = loadSaved();
   const savedChatByUser = savedWorkspace.chatByUser || {};
   const [chatId, setChatId] = useState(savedChatByUser[user.id] || "");
+  const [chatFallbacks, setChatFallbacks] = useState({});
   const [profileReturnView, setProfileReturnView] = useState("services");
   const [workspaceError, setWorkspaceError] = useState("");
 
@@ -726,6 +727,16 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
         setWorkspaceError(error.message);
         return;
       }
+      setChatFallbacks((items) => ({
+        ...items,
+        [data]: {
+          id: data,
+          title: executor.name,
+          subtitle: executor.title || "Личная переписка",
+          readonly: false,
+          messages: [],
+        },
+      }));
       setChatId(`conversation:${data}`);
       setView("messages");
       return;
@@ -743,7 +754,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
         {workspaceError ? <div className="panel error-state">{workspaceError}</div> : null}
         {view === "messages" ? <ChatMenu onServices={openServices} onChat={openChat} /> : null}
         {view === "services" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
-        {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
+        {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} externalConversationFallbacks={chatFallbacks} /> : null}
         {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} onBack={closeProfile} /> : null}
       </section>
     </section>
@@ -991,7 +1002,7 @@ function Afisha({ user, onRequireSubscription, sourceEvents, eventsLoading, even
   );
 }
 
-function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
+function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, externalConversationFallbacks = {} }) {
   const [conversations, setConversations] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -1072,7 +1083,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
         const isDirect = conversation.conversation_type === "direct";
         return {
           id: conversation.id,
-          title: isDirect ? (profile?.display_name || "Собеседник") : (conversation.title || "Чат ХурМа"),
+          title: isDirect ? (profile?.display_name || conversation.title || "Чат") : (conversation.title || "Чат ХурМа"),
           subtitle: isDirect ? [profile?.role === "executor" ? "Исполнитель" : "Клиент", profile?.city, profile?.search_area].filter(Boolean).join(" · ") : (conversation.subtitle || "Групповой чат"),
           readonly: conversation.is_readonly,
           preview: lastMessage?.body || "Сообщений пока нет",
@@ -1112,12 +1123,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
       setChatError(error.message);
       return;
     }
-    setMessages(data.map((message) => ({
-      id: message.id,
-      text: message.body,
-      time: new Date(message.created_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
-      me: message.sender_id === user.id,
-    })));
+    setMessages(data.map((message) => normalizeChatMessage(message, user.id)));
   }
 
   useEffect(() => {
@@ -1132,6 +1138,15 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
     if (activeConversationId) loadMessages(activeConversationId);
     else setMessages([]);
   }, [chatId]);
+
+  useEffect(() => {
+    if (!activeConversationId || loadingChats) return;
+    const hasDialog = conversations.some((item) => item.id === activeConversationId);
+    const hasFallback = conversationFallbacks[activeConversationId] || externalConversationFallbacks[activeConversationId];
+    if (!hasDialog && !hasFallback) {
+      setChatId("");
+    }
+  }, [activeConversationId, loadingChats, conversations, conversationFallbacks, externalConversationFallbacks]);
 
   async function startContactChat(contact) {
     setChatError("");
@@ -1224,13 +1239,33 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
         setChatError(toUserError(error));
         return;
       }
+      const sentMessage = data && typeof data === "object"
+        ? data
+        : {
+            id: data || `local:${Date.now()}`,
+            sender_id: user.id,
+            body: text,
+            created_at: new Date().toISOString(),
+          };
       setDraft("");
-      setMessages((items) => [...items, {
-        id: data || `local:${Date.now()}`,
-        text,
-        time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
-        me: true,
-      }]);
+      setMessages((items) => upsertChatMessage(items, normalizeChatMessage(sentMessage, user.id, text)));
+      if (!data || typeof data !== "object") {
+        const messageId = sentMessage.id && String(sentMessage.id).startsWith("local:") ? null : sentMessage.id;
+        if (messageId) {
+          const { data: savedMessage, error: verifyError } = await supabaseClient
+            .from("messages")
+            .select("id, sender_id, body, created_at")
+            .eq("id", messageId)
+            .maybeSingle();
+          if (savedMessage) {
+            setMessages((items) => upsertChatMessage(items, normalizeChatMessage(savedMessage, user.id, text)));
+          } else if (verifyError) {
+            setChatError(toUserError(verifyError));
+          } else {
+            setChatInfo("Сообщение отправлено, но база пока не вернула его при проверке. Обновите SQL-функцию чата в Supabase.");
+          }
+        }
+      }
       await loadConversations();
     } catch (error) {
       setChatError(toUserError(error));
@@ -1247,7 +1282,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
   });
   const visibleMessages = activeConversationId ? messages : (chat?.messages || []);
   const renderedChat = chat || (activeConversationId
-    ? (conversationFallbacks[activeConversationId] || { title: "Собеседник", subtitle: "Личная переписка", readonly: false, messages: [] })
+    ? (conversationFallbacks[activeConversationId] || externalConversationFallbacks[activeConversationId] || { title: "Чат", subtitle: "Личная переписка", readonly: false, messages: [] })
     : { title: "Чат ХурМа", subtitle: "Загружаем переписку", readonly: true, messages: [] });
   const canSendInCurrentChat = Boolean(activeConversationId && !renderedChat.readonly && !activeManualChat && canUseDatabaseChat);
   const readonlyText = activeManualChat

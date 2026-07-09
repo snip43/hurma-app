@@ -1,7 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { normalizeContact, buildManualContact } = require("../src/chat-utils.js");
+const {
+  normalizeContact,
+  buildManualContact,
+  normalizeChatMessage,
+  upsertChatMessage,
+} = require("../src/chat-utils.js");
 
 test("normalizeContact maps a database profile to a contact card", () => {
   const contact = normalizeContact({
@@ -19,6 +24,30 @@ test("normalizeContact maps a database profile to a contact card", () => {
     source: "database",
     canMessage: true,
   });
+});
+
+test("normalizeChatMessage maps a database message for the current user", () => {
+  const message = normalizeChatMessage({
+    id: "message-1",
+    sender_id: "user-1",
+    body: "hello",
+    created_at: "2026-07-09T10:15:00.000Z",
+  }, "user-1");
+
+  assert.equal(message.id, "message-1");
+  assert.equal(message.text, "hello");
+  assert.equal(message.me, true);
+  assert.match(message.time, /^\d{2}:\d{2}$/);
+});
+
+test("upsertChatMessage appends new messages and updates existing messages", () => {
+  const first = { id: "message-1", text: "one", me: true };
+  const updated = { id: "message-1", text: "two", me: true };
+  const second = { id: "message-2", text: "three", me: false };
+
+  assert.deepEqual(upsertChatMessage([], first), [first]);
+  assert.deepEqual(upsertChatMessage([first], updated), [updated]);
+  assert.deepEqual(upsertChatMessage([updated], second), [updated, second]);
 });
 
 test("buildManualContact creates a local invite contact", () => {
