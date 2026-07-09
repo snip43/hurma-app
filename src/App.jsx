@@ -1017,6 +1017,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   const [chatError, setChatError] = useState("");
   const [chatInfo, setChatInfo] = useState("");
   const [loadingChats, setLoadingChats] = useState(false);
+  const messageLoadRef = useRef(0);
   const activeConversationId = chatId.startsWith("conversation:") ? chatId.replace("conversation:", "") : "";
   const executorId = chatId.startsWith("executor:") ? chatId.replace("executor:", "") : "";
   const executor = EXECUTORS.find((item) => item.id === executorId);
@@ -1114,11 +1115,14 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
 
   async function loadMessages(conversationId) {
     if (!conversationId || !canUseDatabaseChat) return;
+    const loadId = messageLoadRef.current + 1;
+    messageLoadRef.current = loadId;
     const { data, error } = await supabaseClient
       .from("messages")
       .select("id, sender_id, body, created_at")
       .eq("conversation_id", conversationId)
       .order("created_at", { ascending: true });
+    if (loadId !== messageLoadRef.current) return;
     if (error) {
       setChatError(error.message);
       return;
@@ -1247,6 +1251,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
             body: text,
             created_at: new Date().toISOString(),
           };
+      messageLoadRef.current += 1;
       setDraft("");
       setMessages((items) => upsertChatMessage(items, normalizeChatMessage(sentMessage, user.id, text)));
       if (!data || typeof data !== "object") {
