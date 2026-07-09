@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260709-section-focus-reset" />
+    <link rel="stylesheet" href="styles.css?v=20260709-service-icon-grid" />
   </head>
   <body>
     <div id="app">
@@ -39,8 +39,8 @@
     </noscript>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/supabase-config.js"></script>
-    <script src="src/async-utils.js?v=20260709-section-focus-reset"></script>
-    <script src="src/chat-utils.js?v=20260709-section-focus-reset"></script>
+    <script src="src/async-utils.js?v=20260709-service-icon-grid"></script>
+    <script src="src/chat-utils.js?v=20260709-service-icon-grid"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"></script>
@@ -62,6 +62,13 @@ const CITIES = {
 
 const AREA_FILTERS = ["Все районы", ...CITIES["Хургада"].filter((area) => area !== "Все")];
 const SERVICES = ["Трансфер", "Клининг", "Афиша"];
+const SERVICE_ICONS = {
+  "Трансфер": "🚕",
+  "Клининг": "🧼",
+  "Афиша": "🎟",
+  "Чат": "💬",
+  "Чаты": "💬",
+};
 const EVENT_TYPES = ["Все мероприятия", "Афиша", "Спорт", "Для детей"];
 const SPORTS = ["Все виды спорта", "Футбол", "Йога", "Дайвинг", "Бег", "Падел", "Волейбол", "Баскетбол"];
 const AGES = ["Любой возраст", "0+", "6+", "12+", "16+"];
@@ -699,7 +706,8 @@ function ChatMenu({ onServices, onChat }) {
   return (
     <div className="service-tabs service-tabs-compact chat-tabs-compact">
       <button className="service-tab-card active" type="button" onClick={onChat}>
-        Чаты
+        <span className="service-tab-icon" aria-hidden="true">{SERVICE_ICONS["Чаты"]}</span>
+        <strong>Чаты</strong>
       </button>
       <button className="service-tabs-reset" type="button" onClick={onServices}>
         Все разделы
@@ -800,10 +808,12 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
       <div className="service-tabs">
         {SERVICES.map((item) => (
           <button key={item} className="service-tab-card" type="button" onClick={() => setService(item)}>
+            <span className="service-tab-icon" aria-hidden="true">{SERVICE_ICONS[item]}</span>
             <strong>{item}</strong>
           </button>
         ))}
         <button className="service-tab-card" type="button" onClick={onOpenChat}>
+          <span className="service-tab-icon" aria-hidden="true">{SERVICE_ICONS["Чат"]}</span>
           <strong>Чат</strong>
         </button>
       </div>
@@ -814,7 +824,8 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
     <>
       <div className="service-tabs service-tabs-compact">
         <button className="service-tab-card active" type="button">
-          {service}
+          <span className="service-tab-icon" aria-hidden="true">{SERVICE_ICONS[service]}</span>
+          <strong>{service}</strong>
         </button>
         <button className="service-tabs-reset" type="button" onClick={showAllSections}>
           Все разделы

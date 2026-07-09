@@ -15,6 +15,13 @@ const CITIES = {
 
 const AREA_FILTERS = ["Все районы", ...CITIES["Хургада"].filter((area) => area !== "Все")];
 const SERVICES = ["Трансфер", "Клининг", "Афиша"];
+const SERVICE_ICONS = {
+  "Трансфер": "🚕",
+  "Клининг": "🧼",
+  "Афиша": "🎟",
+  "Чат": "💬",
+  "Чаты": "💬",
+};
 const EVENT_TYPES = ["Все мероприятия", "Афиша", "Спорт", "Для детей"];
 const SPORTS = ["Все виды спорта", "Футбол", "Йога", "Дайвинг", "Бег", "Падел", "Волейбол", "Баскетбол"];
 const AGES = ["Любой возраст", "0+", "6+", "12+", "16+"];
@@ -652,7 +659,8 @@ function ChatMenu({ onServices, onChat }) {
   return (
     <div className="service-tabs service-tabs-compact chat-tabs-compact">
       <button className="service-tab-card active" type="button" onClick={onChat}>
-        Чаты
+        <span className="service-tab-icon" aria-hidden="true">{SERVICE_ICONS["Чаты"]}</span>
+        <strong>Чаты</strong>
       </button>
       <button className="service-tabs-reset" type="button" onClick={onServices}>
         Все разделы
@@ -753,10 +761,12 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
       <div className="service-tabs">
         {SERVICES.map((item) => (
           <button key={item} className="service-tab-card" type="button" onClick={() => setService(item)}>
+            <span className="service-tab-icon" aria-hidden="true">{SERVICE_ICONS[item]}</span>
             <strong>{item}</strong>
           </button>
         ))}
         <button className="service-tab-card" type="button" onClick={onOpenChat}>
+          <span className="service-tab-icon" aria-hidden="true">{SERVICE_ICONS["Чат"]}</span>
           <strong>Чат</strong>
         </button>
       </div>
@@ -767,10 +777,11 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
     <>
       <div className="service-tabs service-tabs-compact">
         <button className="service-tab-card active" type="button">
-          {service}
+          <span className="service-tab-icon" aria-hidden="true">{SERVICE_ICONS[service]}</span>
+          <strong>{service}</strong>
         </button>
         <button className="service-tabs-reset" type="button" onClick={showAllSections}>
-          Все сервисы
+          Все разделы
         </button>
       </div>
       {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} sourceEvents={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : <ExecutorList service={service} user={user} onStartChat={onStartChat} databaseExecutors={databaseExecutors} />}
