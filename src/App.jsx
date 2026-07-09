@@ -1231,7 +1231,6 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile }) {
         time: new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }),
         me: true,
       }]);
-      await loadMessages(activeConversationId);
       await loadConversations();
     } catch (error) {
       setChatError(toUserError(error));
