@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260709-rpc-chat-preview" />
+  <link rel="stylesheet" href="styles.css?v=20260709-long-sections-button" />
   </head>
   <body>
     <div id="app">
@@ -709,7 +709,7 @@ function ChatMenu({ onServices, onChat }) {
         <span className="section-switch-symbol" aria-hidden="true">{SERVICE_ICONS["Чаты"]}</span>
       </button>
       <button className="section-switch-all" type="button" onClick={onServices} aria-label="Все разделы">
-        <span className="section-switch-symbol" aria-hidden="true">☰</span>
+        Все разделы
       </button>
     </div>
   );
@@ -837,7 +837,7 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
           <span className="section-switch-symbol" aria-hidden="true">{SERVICE_ICONS[service]}</span>
         </button>
         <button className="section-switch-all" type="button" onClick={showAllSections} aria-label="Все разделы">
-          <span className="section-switch-symbol" aria-hidden="true">☰</span>
+          Все разделы
         </button>
       </div>
       {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} sourceEvents={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : <ExecutorList service={service} user={user} onStartChat={onStartChat} databaseExecutors={databaseExecutors} />}

@@ -1198,7 +1198,7 @@ button {
 
 .section-switch {
   display: grid;
-  grid-template-columns: repeat(2, clamp(56px, 6vw, 68px));
+  grid-template-columns: clamp(56px, 6vw, 68px) minmax(180px, 1fr);
   align-items: stretch;
   justify-content: start;
   gap: clamp(10px, 1.6vw, 14px);
@@ -1237,9 +1237,10 @@ button {
 .section-switch-all {
   display: grid;
   place-items: center;
-  padding: 6px;
+  padding: 6px clamp(18px, 3vw, 34px);
   color: var(--brand-dark);
   background: rgba(255, 255, 255, 0.92);
+  font-size: clamp(17px, 2vw, 22px);
 }
 
 .cards-grid {

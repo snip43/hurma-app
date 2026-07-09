@@ -662,7 +662,7 @@ function ChatMenu({ onServices, onChat }) {
         <span className="section-switch-symbol" aria-hidden="true">{SERVICE_ICONS["Чаты"]}</span>
       </button>
       <button className="section-switch-all" type="button" onClick={onServices} aria-label="Все разделы">
-        <span className="section-switch-symbol" aria-hidden="true">☰</span>
+        Все разделы
       </button>
     </div>
   );
@@ -790,7 +790,7 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
           <span className="section-switch-symbol" aria-hidden="true">{SERVICE_ICONS[service]}</span>
         </button>
         <button className="section-switch-all" type="button" onClick={showAllSections} aria-label="Все разделы">
-          <span className="section-switch-symbol" aria-hidden="true">☰</span>
+          Все разделы
         </button>
       </div>
       {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} sourceEvents={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : <ExecutorList service={service} user={user} onStartChat={onStartChat} databaseExecutors={databaseExecutors} />}
