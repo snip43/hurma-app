@@ -158,6 +158,8 @@ revoke all on function public.is_conversation_member(uuid) from public;
 revoke all on function public.can_send_message(uuid) from public;
 revoke all on function public.is_conversation_creator(uuid) from public;
 revoke all on function public.get_chat_messages(uuid) from public;
+revoke all on function public.mark_conversation_read(uuid) from public;
+revoke all on function public.list_my_conversations() from public;
 revoke all on function public.cancel_own_request(uuid) from public;
 revoke all on function public.set_executor_request_status(uuid, public.request_status) from public;
 
@@ -166,5 +168,7 @@ grant execute on function public.is_conversation_member(uuid) to authenticated;
 grant execute on function public.can_send_message(uuid) to authenticated;
 grant execute on function public.is_conversation_creator(uuid) to authenticated;
 grant execute on function public.get_chat_messages(uuid) to authenticated;
+grant execute on function public.mark_conversation_read(uuid) to authenticated;
+grant execute on function public.list_my_conversations() to authenticated;
 grant execute on function public.cancel_own_request(uuid) to authenticated;
 grant execute on function public.set_executor_request_status(uuid, public.request_status) to authenticated;

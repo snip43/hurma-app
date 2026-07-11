@@ -138,6 +138,7 @@ create table if not exists public.conversation_members (
   user_id uuid not null references public.profiles(id) on delete cascade,
   member_role public.member_role not null default 'member',
   joined_at timestamptz not null default now(),
+  last_read_at timestamptz,
   primary key (conversation_id, user_id)
 );
 
@@ -167,6 +168,8 @@ create index if not exists requests_event_id_idx on public.requests(event_id);
 create index if not exists conversations_created_by_idx on public.conversations(created_by);
 create index if not exists conversation_members_user_id_idx
   on public.conversation_members(user_id, conversation_id);
+create index if not exists conversation_members_read_state_idx
+  on public.conversation_members(user_id, conversation_id, last_read_at);
 create index if not exists messages_conversation_created_idx
   on public.messages(conversation_id, created_at);
 create index if not exists messages_sender_id_idx on public.messages(sender_id);

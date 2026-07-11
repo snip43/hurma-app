@@ -140,6 +140,7 @@ create table if not exists public.conversation_members (
   user_id uuid not null references public.profiles(id) on delete cascade,
   member_role public.member_role not null default 'member',
   joined_at timestamptz not null default now(),
+  last_read_at timestamptz,
   primary key (conversation_id, user_id)
 );
 
@@ -169,6 +170,8 @@ create index if not exists requests_event_id_idx on public.requests(event_id);
 create index if not exists conversations_created_by_idx on public.conversations(created_by);
 create index if not exists conversation_members_user_id_idx
   on public.conversation_members(user_id, conversation_id);
+create index if not exists conversation_members_read_state_idx
+  on public.conversation_members(user_id, conversation_id, last_read_at);
 create index if not exists messages_conversation_created_idx
   on public.messages(conversation_id, created_at);
 create index if not exists messages_sender_id_idx on public.messages(sender_id);
@@ -474,6 +477,118 @@ begin
 end;
 $$;
 
+create or replace function public.mark_conversation_read(target_conversation_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := (select auth.uid());
+begin
+  if current_user_id is null then
+    raise exception 'Authentication required';
+  end if;
+
+  if target_conversation_id is null then
+    raise exception 'Conversation required';
+  end if;
+
+  update public.conversation_members cm
+  set last_read_at = now()
+  where cm.conversation_id = target_conversation_id
+    and cm.user_id = current_user_id;
+
+  if not found then
+    raise exception 'Conversation not found';
+  end if;
+end;
+$$;
+
+create or replace function public.list_my_conversations()
+returns table (
+  conversation_id uuid,
+  title text,
+  subtitle text,
+  is_readonly boolean,
+  updated_at timestamptz,
+  last_message_body text,
+  last_message_at timestamptz,
+  unread_count integer
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with my_members as (
+    select
+      cm.conversation_id,
+      cm.last_read_at,
+      c.conversation_type,
+      c.title,
+      c.subtitle,
+      c.is_readonly,
+      c.updated_at
+    from public.conversation_members cm
+    join public.conversations c on c.id = cm.conversation_id
+    where cm.user_id = (select auth.uid())
+  ),
+  other_members as (
+    select
+      cm.conversation_id,
+      p.display_name,
+      p.role,
+      p.city,
+      p.search_area,
+      row_number() over (partition by cm.conversation_id order by cm.joined_at asc) as member_rank
+    from public.conversation_members cm
+    join public.profiles p on p.id = cm.user_id
+    where cm.user_id <> (select auth.uid())
+  ),
+  latest_messages as (
+    select distinct on (m.conversation_id)
+      m.conversation_id,
+      m.body,
+      m.created_at
+    from public.messages m
+    join my_members mm on mm.conversation_id = m.conversation_id
+    order by m.conversation_id, m.created_at desc
+  )
+  select
+    mm.conversation_id,
+    case
+      when mm.conversation_type = 'direct' then coalesce(om.display_name, mm.title, 'Чат')
+      else coalesce(mm.title, 'Чат ХурМа')
+    end as title,
+    case
+      when mm.conversation_type = 'direct' then concat_ws(
+        ' · ',
+        case when om.role = 'executor' then 'Исполнитель' else 'Клиент' end,
+        om.city,
+        om.search_area
+      )
+      else coalesce(mm.subtitle, 'Групповой чат')
+    end as subtitle,
+    mm.is_readonly,
+    mm.updated_at,
+    lm.body as last_message_body,
+    lm.created_at as last_message_at,
+    coalesce((
+      select count(*)::integer
+      from public.messages unread
+      where unread.conversation_id = mm.conversation_id
+        and unread.sender_id <> (select auth.uid())
+        and (mm.last_read_at is null or unread.created_at > mm.last_read_at)
+    ), 0) as unread_count
+  from my_members mm
+  left join other_members om
+    on om.conversation_id = mm.conversation_id
+    and om.member_rank = 1
+  left join latest_messages lm on lm.conversation_id = mm.conversation_id
+  order by coalesce(lm.created_at, mm.updated_at) desc;
+$$;
+
 create or replace function public.cancel_own_request(request_id uuid)
 returns void
 language plpgsql
@@ -720,6 +835,8 @@ revoke all on function public.is_conversation_member(uuid) from public;
 revoke all on function public.can_send_message(uuid) from public;
 revoke all on function public.is_conversation_creator(uuid) from public;
 revoke all on function public.get_chat_messages(uuid) from public;
+revoke all on function public.mark_conversation_read(uuid) from public;
+revoke all on function public.list_my_conversations() from public;
 revoke all on function public.cancel_own_request(uuid) from public;
 revoke all on function public.set_executor_request_status(uuid, public.request_status) from public;
 
@@ -730,6 +847,8 @@ grant execute on function public.can_send_message(uuid) to authenticated;
 grant execute on function public.is_conversation_creator(uuid) to authenticated;
 grant execute on function public.send_chat_message(uuid, text) to authenticated;
 grant execute on function public.get_chat_messages(uuid) to authenticated;
+grant execute on function public.mark_conversation_read(uuid) to authenticated;
+grant execute on function public.list_my_conversations() to authenticated;
 grant execute on function public.cancel_own_request(uuid) to authenticated;
 grant execute on function public.set_executor_request_status(uuid, public.request_status) to authenticated;
 

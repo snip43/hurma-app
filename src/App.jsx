@@ -673,7 +673,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
   const [service, setService] = useState("");
   const savedWorkspace = loadSaved();
   const savedChatByUser = savedWorkspace.chatByUser || {};
-  const [chatId, setChatId] = useState(savedChatByUser[user.id] || "");
+  const [chatId, setChatId] = useState("");
   const [chatFallbacks, setChatFallbacks] = useState({});
   const [profileReturnView, setProfileReturnView] = useState("services");
   const [workspaceError, setWorkspaceError] = useState("");
@@ -692,6 +692,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
 
   function openChat() {
     setView("messages");
+    setChatId("");
   }
 
   function openProfile() {
@@ -711,6 +712,10 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
     else delete nextChatByUser[user.id];
     saveSaved({ ...current, chatByUser: nextChatByUser });
   }, [chatId, user.id]);
+
+  useEffect(() => {
+    window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }));
+  }, [view, service]);
 
   async function startExecutorChat(executor) {
     setWorkspaceError("");
@@ -1034,6 +1039,66 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   const chat = activeDatabaseChat || activeManualChat || executorChat || COMMUNITY_CHATS.find((item) => item.id === chatId);
   const canUseDatabaseChat = Boolean(supabaseClient && user && !user.isGuest);
 
+  async function loadConversationsFromTables() {
+    const { data, error } = await withTimeout(
+      supabaseClient
+        .from("conversation_members")
+        .select("conversation_id, last_read_at, conversations(id, conversation_type, title, subtitle, is_readonly, updated_at)")
+        .eq("user_id", user.id),
+      CHAT_LOAD_TIMEOUT_MS,
+      "Чаты загружаются слишком долго. Показываем доступные чаты, попробуйте обновить позже."
+    );
+    if (error) throw error;
+    const conversationIds = (data || []).map((item) => item.conversation_id).filter(Boolean);
+    if (!conversationIds.length) return [];
+
+    const [membersResult, messagesResult] = await withTimeout(
+      Promise.all([
+        supabaseClient
+          .from("conversation_members")
+          .select("conversation_id, user_id, profiles(id, display_name, role, city, search_area)")
+          .in("conversation_id", conversationIds),
+        supabaseClient
+          .from("messages")
+          .select("id, conversation_id, sender_id, body, created_at")
+          .in("conversation_id", conversationIds)
+          .order("created_at", { ascending: false }),
+      ]),
+      CHAT_LOAD_TIMEOUT_MS,
+      "Чаты загружаются слишком долго. Показываем доступные чаты, попробуйте обновить позже."
+    );
+    if (membersResult.error) throw membersResult.error;
+    if (messagesResult.error) throw messagesResult.error;
+
+    const memberRows = membersResult.data || [];
+    const messageRows = messagesResult.data || [];
+    return data.map((item) => {
+      const conversation = item.conversations;
+      const members = memberRows.filter((member) => member.conversation_id === item.conversation_id);
+      const otherMember = members.find((member) => member.user_id !== user.id);
+      const profile = otherMember?.profiles;
+      const conversationMessages = messageRows.filter((message) => message.conversation_id === item.conversation_id);
+      const lastMessage = conversationMessages[0];
+      const lastReadTime = item.last_read_at ? new Date(item.last_read_at).getTime() : 0;
+      const unreadCount = conversationMessages.filter((message) => {
+        const createdAt = new Date(message.created_at).getTime();
+        return message.sender_id !== user.id && (!lastReadTime || createdAt > lastReadTime);
+      }).length;
+      const isDirect = conversation.conversation_type === "direct";
+      return {
+        id: conversation.id,
+        title: isDirect ? (profile?.display_name || conversation.title || "Собеседник") : (conversation.title || "Чат ХурМа"),
+        subtitle: isDirect ? [profile?.role === "executor" ? "Исполнитель" : "Клиент", profile?.city, profile?.search_area].filter(Boolean).join(" · ") : (conversation.subtitle || "Групповой чат"),
+        readonly: conversation.is_readonly,
+        preview: lastMessage?.body || "Сообщений пока нет",
+        time: lastMessage ? formatEventDate(lastMessage.created_at) : "",
+        unreadCount,
+        hasMessages: Boolean(lastMessage),
+        lastMessageAt: lastMessage?.created_at || conversation.updated_at,
+      };
+    }).sort((first, second) => new Date(second.lastMessageAt || 0) - new Date(first.lastMessageAt || 0));
+  }
+
   async function loadConversations() {
     if (!canUseDatabaseChat) {
       setConversations([]);
@@ -1041,61 +1106,30 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     }
     setLoadingChats(true);
     try {
-      const { data, error } = await withTimeout(
-        supabaseClient
-          .from("conversation_members")
-          .select("conversation_id, conversations(id, conversation_type, title, subtitle, is_readonly, updated_at)")
-          .eq("user_id", user.id),
+      const { data: rpcDialogs, error: rpcError } = await withTimeout(
+        supabaseClient.rpc("list_my_conversations"),
         CHAT_LOAD_TIMEOUT_MS,
         "Чаты загружаются слишком долго. Показываем доступные чаты, попробуйте обновить позже."
       );
-      if (error) throw error;
-      const conversationIds = data.map((item) => item.conversation_id);
-      if (!conversationIds.length) {
-        setConversations([]);
+      if (!rpcError && Array.isArray(rpcDialogs)) {
+        setConversations(rpcDialogs.map((item) => ({
+          id: item.conversation_id,
+          title: item.title || "Чат",
+          subtitle: item.subtitle || "Личная переписка",
+          readonly: item.is_readonly,
+          preview: item.last_message_body || "Сообщений пока нет",
+          time: item.last_message_at ? formatEventDate(item.last_message_at) : "",
+          unreadCount: Number(item.unread_count || 0),
+          hasMessages: Boolean(item.last_message_body),
+          lastMessageAt: item.last_message_at || item.updated_at,
+        })));
         return;
       }
-      const [membersResult, messageResults] = await withTimeout(
-        Promise.all([
-          supabaseClient
-            .from("conversation_members")
-            .select("conversation_id, user_id, profiles(id, display_name, role, city, search_area)")
-            .in("conversation_id", conversationIds),
-          Promise.all(conversationIds.map(async (conversationId) => {
-            const result = await supabaseClient.rpc("get_chat_messages", {
-              target_conversation_id: conversationId,
-            });
-            return { conversationId, ...result };
-          })),
-        ]),
-        CHAT_LOAD_TIMEOUT_MS,
-        "Чаты загружаются слишком долго. Показываем доступные чаты, попробуйте обновить позже."
-      );
-      if (membersResult.error) throw membersResult.error;
-      const failedMessagesResult = messageResults.find((result) => result.error);
-      if (failedMessagesResult) throw failedMessagesResult.error;
-      const memberRows = membersResult.data || [];
-      const messageRows = messageResults
-        .flatMap(({ conversationId, data: rows = [] }) => rows.map((message) => ({ ...message, conversation_id: conversationId })))
-        .sort((first, second) => new Date(second.created_at) - new Date(first.created_at));
-      const mapped = data.map((item) => {
-        const conversation = item.conversations;
-        const members = memberRows.filter((member) => member.conversation_id === item.conversation_id);
-        const otherMember = members.find((member) => member.user_id !== user.id);
-        const profile = otherMember?.profiles;
-        const lastMessage = messageRows.find((message) => message.conversation_id === item.conversation_id);
-        const isDirect = conversation.conversation_type === "direct";
-        return {
-          id: conversation.id,
-          title: isDirect ? (profile?.display_name || conversation.title || "Чат") : (conversation.title || "Чат ХурМа"),
-          subtitle: isDirect ? [profile?.role === "executor" ? "Исполнитель" : "Клиент", profile?.city, profile?.search_area].filter(Boolean).join(" · ") : (conversation.subtitle || "Групповой чат"),
-          readonly: conversation.is_readonly,
-          preview: lastMessage?.body || "Сообщений пока нет",
-          time: lastMessage ? formatEventDate(lastMessage.created_at) : "",
-        };
-      });
+
+      const mapped = await loadConversationsFromTables();
       setConversations(mapped);
     } catch (error) {
+      setConversations([]);
       setChatError(toUserError(error));
     } finally {
       setLoadingChats(false);
@@ -1116,6 +1150,17 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     setContacts(data.map(normalizeContact));
   }
 
+  async function markConversationRead(conversationId) {
+    if (!conversationId || !canUseDatabaseChat) return;
+    const { error } = await supabaseClient.rpc("mark_conversation_read", {
+      target_conversation_id: conversationId,
+    });
+    if (error) return;
+    setConversations((items) => items.map((item) => (
+      item.id === conversationId ? { ...item, unreadCount: 0 } : item
+    )));
+  }
+
   async function loadMessages(conversationId) {
     if (!conversationId || !canUseDatabaseChat) return;
     const loadId = messageLoadRef.current + 1;
@@ -1129,6 +1174,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
       return;
     }
     setMessages(data.map((message) => normalizeChatMessage(message, user.id)));
+    if (data.length) markConversationRead(conversationId);
   }
 
   useEffect(() => {
@@ -1150,7 +1196,12 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   useEffect(() => {
     const list = messagesListRef.current;
     if (!list) return;
-    list.scrollTop = list.scrollHeight;
+    const scrollToLatest = () => {
+      list.scrollTop = list.scrollHeight;
+      list.lastElementChild?.scrollIntoView({ block: "end" });
+    };
+    window.requestAnimationFrame(scrollToLatest);
+    window.setTimeout(scrollToLatest, 120);
   }, [chatId, messages.length]);
 
   useEffect(() => {
@@ -1300,6 +1351,13 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     event.currentTarget.form?.requestSubmit();
   }
 
+  function chooseAttachment(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setChatInfo(`Файл "${file.name}" выбран. Отправку файлов подключим через хранилище Supabase.`);
+    event.target.value = "";
+  }
+
   const databaseDialogs = conversations.map((item) => ({ ...item, chatId: `conversation:${item.id}` }));
   const manualDialogs = manualContacts.map((item) => ({ ...item, chatId: item.id, preview: item.subtitle, readonly: true }));
   const staticDialogs = COMMUNITY_CHATS.map((item) => ({ ...item, chatId: item.id, preview: item.subtitle }));
@@ -1347,7 +1405,10 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
                 <div className="wa-dialog-main">
                   <div className="wa-dialog-row">
                     <strong>{item.title}</strong>
-                    {item.time ? <small>{item.time}</small> : null}
+                    <span className="wa-dialog-meta">
+                      {item.time ? <small>{item.time}</small> : null}
+                      {item.unreadCount ? <span className="wa-unread">{item.unreadCount > 99 ? "99+" : item.unreadCount}</span> : null}
+                    </span>
                   </div>
                   <span className="wa-dialog-preview">{item.preview || item.subtitle}</span>
                 </div>
@@ -1414,7 +1475,16 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
             </div>
           )) : <div className="wa-empty"><strong>Сообщений пока нет</strong><span>{emptyText}</span></div>}
         </div>
-        {canSendInCurrentChat ? <form className="wa-input" onSubmit={sendMessage}><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={submitDraftFromKeyboard} placeholder="Напишите сообщение..." /><button type="submit" aria-label="Отправить сообщение">➤</button></form> : <div className="wa-readonly">{readonlyText}</div>}
+        {canSendInCurrentChat ? <form className="wa-input" onSubmit={sendMessage}>
+          <button className="wa-attach-button" type="button" onClick={() => document.getElementById("chat-file-input")?.click()} aria-label="Добавить файл" title="Добавить файл">
+            <svg className="wa-attach-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21.4 11.1 12 20.5a6 6 0 0 1-8.5-8.5l9.4-9.4a4 4 0 0 1 5.7 5.7l-9.4 9.4a2 2 0 0 1-2.8-2.8l8.8-8.8" />
+            </svg>
+          </button>
+          <input id="chat-file-input" className="wa-file-input" type="file" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" onChange={chooseAttachment} />
+          <textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={submitDraftFromKeyboard} placeholder="Напишите сообщение..." />
+          <button className="wa-send-button" type="submit" aria-label="Отправить сообщение">↑</button>
+        </form> : <div className="wa-readonly">{readonlyText}</div>}
       </section>
     </div>
   );

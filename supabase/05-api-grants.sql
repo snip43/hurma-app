@@ -29,5 +29,7 @@ grant execute on function public.is_conversation_creator(uuid) to authenticated;
 grant execute on function public.create_direct_conversation(uuid) to authenticated;
 grant execute on function public.send_chat_message(uuid, text) to authenticated;
 grant execute on function public.get_chat_messages(uuid) to authenticated;
+grant execute on function public.mark_conversation_read(uuid) to authenticated;
+grant execute on function public.list_my_conversations() to authenticated;
 grant execute on function public.cancel_own_request(uuid) to authenticated;
 grant execute on function public.set_executor_request_status(uuid, public.request_status) to authenticated;
