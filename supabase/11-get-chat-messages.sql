@@ -1,8 +1,14 @@
-create or replace function public.get_chat_messages(target_conversation_id uuid)
+drop function if exists public.get_chat_messages(uuid);
+
+create function public.get_chat_messages(target_conversation_id uuid)
 returns table (
   id uuid,
   sender_id uuid,
   body text,
+  attachment_path text,
+  attachment_name text,
+  attachment_type text,
+  attachment_size bigint,
   created_at timestamptz
 )
 language plpgsql
@@ -30,7 +36,15 @@ begin
   end if;
 
   return query
-    select m.id, m.sender_id, m.body, m.created_at
+    select
+      m.id,
+      m.sender_id,
+      m.body,
+      m.attachment_path,
+      m.attachment_name,
+      m.attachment_type,
+      m.attachment_size,
+      m.created_at
     from public.messages m
     where m.conversation_id = target_conversation_id
     order by m.created_at asc;

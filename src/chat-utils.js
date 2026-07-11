@@ -38,11 +38,23 @@
 
   function normalizeChatMessage(message, currentUserId, fallbackText) {
     const createdAt = message && message.created_at ? message.created_at : new Date().toISOString();
+    const attachmentPath = message && message.attachment_path ? message.attachment_path : "";
+    const attachmentName = message && message.attachment_name ? message.attachment_name : "";
+    const attachmentType = message && message.attachment_type ? message.attachment_type : "";
+    const attachmentSize = message && typeof message.attachment_size !== "undefined" ? message.attachment_size : null;
+    const attachmentUrl = message && (message.signed_url || message.attachment_url) ? (message.signed_url || message.attachment_url) : "";
     return {
       id: (message && message.id) || `local:${Date.now()}`,
       text: (message && message.body) || fallbackText || "",
       time: formatMessageTime(createdAt),
       me: Boolean(message && message.sender_id === currentUserId),
+      attachment: attachmentPath ? {
+        path: attachmentPath,
+        name: attachmentName || "Файл",
+        type: attachmentType || "application/octet-stream",
+        size: attachmentSize,
+        url: attachmentUrl,
+      } : null,
     };
   }
 

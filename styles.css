@@ -2038,6 +2038,69 @@ button {
   font-size: 11px;
 }
 
+.wa-attachment {
+  display: grid;
+  gap: 6px;
+  min-width: min(260px, 68vw);
+  color: #075e54;
+  text-decoration: none;
+}
+
+.wa-attachment-image {
+  width: min(320px, 68vw);
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #eef1ed;
+}
+
+.wa-attachment-video {
+  width: min(360px, 68vw);
+  max-height: 260px;
+  border-radius: 6px;
+  background: #202124;
+}
+
+.wa-attachment-file {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 7px;
+  background: rgba(7, 94, 84, 0.08);
+}
+
+.wa-attachment-mark {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 10px;
+  color: #fff;
+  background: #128c7e;
+  font-weight: 900;
+}
+
+.wa-attachment-name,
+.wa-attachment-size {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wa-attachment-name {
+  color: #202124;
+  font-weight: 900;
+}
+
+.wa-attachment-size {
+  color: #6d7069;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .wa-input {
   display: grid;
   grid-template-columns: clamp(42px, 6vw, 52px) minmax(0, 1fr) clamp(42px, 6vw, 52px);

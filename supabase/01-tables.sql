@@ -146,9 +146,17 @@ create table if not exists public.messages (
   id uuid primary key default gen_random_uuid(),
   conversation_id uuid not null references public.conversations(id) on delete cascade,
   sender_id uuid not null references public.profiles(id) on delete cascade,
-  body text not null check (char_length(body) between 1 and 4000),
+  body text not null default '',
+  attachment_path text,
+  attachment_name text,
+  attachment_type text,
+  attachment_size bigint,
   created_at timestamptz not null default now(),
-  edited_at timestamptz
+  edited_at timestamptz,
+  constraint messages_body_check check (
+    char_length(body) <= 4000
+    and (char_length(trim(body)) >= 1 or attachment_path is not null)
+  )
 );
 
 create index if not exists subscriptions_user_id_idx on public.subscriptions(user_id);

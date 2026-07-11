@@ -43,6 +43,7 @@ as $$
     select distinct on (m.conversation_id)
       m.conversation_id,
       m.body,
+      m.attachment_name,
       m.created_at
     from public.messages m
     join my_members mm on mm.conversation_id = m.conversation_id
@@ -65,7 +66,7 @@ as $$
     end as subtitle,
     mm.is_readonly,
     mm.updated_at,
-    lm.body as last_message_body,
+    coalesce(nullif(lm.body, ''), case when lm.attachment_name is not null then 'Файл: ' || lm.attachment_name end) as last_message_body,
     lm.created_at as last_message_at,
     coalesce((
       select count(*)::integer

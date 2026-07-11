@@ -246,11 +246,112 @@ begin
 end;
 $$;
 
-create or replace function public.get_chat_messages(target_conversation_id uuid)
+create or replace function public.send_chat_message_with_attachment(
+  target_conversation_id uuid,
+  message_body text default '',
+  p_attachment_path text default null,
+  p_attachment_name text default null,
+  p_attachment_type text default null,
+  p_attachment_size bigint default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  current_user_id uuid := (select auth.uid());
+  clean_body text := coalesce(nullif(trim(message_body), ''), '');
+  clean_attachment_path text := nullif(trim(p_attachment_path), '');
+  clean_attachment_name text := nullif(trim(p_attachment_name), '');
+  clean_attachment_type text := nullif(trim(p_attachment_type), '');
+  inserted_message public.messages%rowtype;
+begin
+  if current_user_id is null then
+    raise exception 'Authentication required';
+  end if;
+
+  if target_conversation_id is null then
+    raise exception 'Conversation required';
+  end if;
+
+  if clean_body = '' and clean_attachment_path is null then
+    raise exception 'Message is empty';
+  end if;
+
+  if char_length(clean_body) > 4000 then
+    raise exception 'Message is too long';
+  end if;
+
+  if clean_attachment_path is not null and split_part(clean_attachment_path, '/', 1) <> current_user_id::text then
+    raise exception 'Attachment path is not allowed';
+  end if;
+
+  if clean_attachment_path is not null and clean_attachment_name is null then
+    clean_attachment_name := 'Файл';
+  end if;
+
+  if p_attachment_size is not null and p_attachment_size > 26214400 then
+    raise exception 'Attachment is too large';
+  end if;
+
+  if not public.has_active_subscription(current_user_id) then
+    raise exception 'Active subscription required';
+  end if;
+
+  if not public.can_send_message(target_conversation_id) then
+    raise exception 'Cannot send message to this conversation';
+  end if;
+
+  insert into public.messages (
+    conversation_id,
+    sender_id,
+    body,
+    attachment_path,
+    attachment_name,
+    attachment_type,
+    attachment_size
+  )
+  values (
+    target_conversation_id,
+    current_user_id,
+    clean_body,
+    clean_attachment_path,
+    clean_attachment_name,
+    coalesce(clean_attachment_type, 'application/octet-stream'),
+    p_attachment_size
+  )
+  returning * into inserted_message;
+
+  update public.conversations
+  set updated_at = inserted_message.created_at
+  where id = target_conversation_id;
+
+  return jsonb_build_object(
+    'id', inserted_message.id,
+    'conversation_id', inserted_message.conversation_id,
+    'sender_id', inserted_message.sender_id,
+    'body', inserted_message.body,
+    'attachment_path', inserted_message.attachment_path,
+    'attachment_name', inserted_message.attachment_name,
+    'attachment_type', inserted_message.attachment_type,
+    'attachment_size', inserted_message.attachment_size,
+    'created_at', inserted_message.created_at
+  );
+end;
+$$;
+
+drop function if exists public.get_chat_messages(uuid);
+
+create function public.get_chat_messages(target_conversation_id uuid)
 returns table (
   id uuid,
   sender_id uuid,
   body text,
+  attachment_path text,
+  attachment_name text,
+  attachment_type text,
+  attachment_size bigint,
   created_at timestamptz
 )
 language plpgsql
@@ -278,7 +379,15 @@ begin
   end if;
 
   return query
-    select m.id, m.sender_id, m.body, m.created_at
+    select
+      m.id,
+      m.sender_id,
+      m.body,
+      m.attachment_path,
+      m.attachment_name,
+      m.attachment_type,
+      m.attachment_size,
+      m.created_at
     from public.messages m
     where m.conversation_id = target_conversation_id
     order by m.created_at asc;

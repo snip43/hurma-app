@@ -40,6 +40,30 @@ test("normalizeChatMessage maps a database message for the current user", () => 
   assert.match(message.time, /^\d{2}:\d{2}$/);
 });
 
+test("normalizeChatMessage maps attachment metadata", () => {
+  const message = normalizeChatMessage({
+    id: "message-file",
+    sender_id: "user-2",
+    body: "",
+    attachment_path: "user-2/conversation-1/photo.jpg",
+    attachment_name: "photo.jpg",
+    attachment_type: "image/jpeg",
+    attachment_size: 2048,
+    signed_url: "https://example.test/photo.jpg",
+    created_at: "2026-07-11T10:15:00.000Z",
+  }, "user-1");
+
+  assert.equal(message.text, "");
+  assert.equal(message.me, false);
+  assert.deepEqual(message.attachment, {
+    path: "user-2/conversation-1/photo.jpg",
+    name: "photo.jpg",
+    type: "image/jpeg",
+    size: 2048,
+    url: "https://example.test/photo.jpg",
+  });
+});
+
 test("upsertChatMessage appends new messages and updates existing messages", () => {
   const first = { id: "message-1", text: "one", me: true };
   const updated = { id: "message-1", text: "two", me: true };
