@@ -2101,6 +2101,11 @@ button {
   font-weight: 700;
 }
 
+.wa-missing-message {
+  color: #6d7069;
+  font-weight: 800;
+}
+
 .wa-input {
   display: grid;
   grid-template-columns: clamp(42px, 6vw, 52px) minmax(0, 1fr) clamp(42px, 6vw, 52px);
@@ -2188,6 +2193,13 @@ button {
   font-size: 22px;
   font-weight: 900;
   line-height: 1;
+}
+
+.wa-attach-button:disabled,
+.wa-send-button:disabled,
+.wa-input textarea:disabled {
+  opacity: 0.72;
+  cursor: wait;
 }
 
 .wa-readonly {

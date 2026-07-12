@@ -1020,6 +1020,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   const [chatError, setChatError] = useState("");
   const [chatInfo, setChatInfo] = useState("");
   const [loadingChats, setLoadingChats] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const messageLoadRef = useRef(0);
   const messagesListRef = useRef(null);
@@ -1069,6 +1070,21 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
         ? { ...message, signed_url: signedByPath[message.attachment_path] || "" }
         : message
     ));
+  }
+
+  async function loadMessagesFromTables(conversationId) {
+    const { data, error } = await supabaseClient
+      .from("messages")
+      .select("id, sender_id, body, attachment_path, attachment_name, attachment_type, attachment_size, created_at")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: true });
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function normalizeMessageRows(rows) {
+    const signedMessages = await withSignedAttachmentUrls(rows || []);
+    return signedMessages.map((message) => normalizeChatMessage(message, user.id));
   }
 
   async function loadConversationsFromTables() {
@@ -1206,9 +1222,16 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
       setChatError(error.message);
       return;
     }
-    const signedMessages = await withSignedAttachmentUrls(data || []);
-    setMessages(signedMessages.map((message) => normalizeChatMessage(message, user.id)));
-    if (signedMessages.length) markConversationRead(conversationId);
+    let rows = data || [];
+    const hasPossibleStaleAttachmentRow = rows.some((message) => (
+      !String(message.body || "").trim()
+      && !message.attachment_path
+    ));
+    if (hasPossibleStaleAttachmentRow) {
+      rows = await loadMessagesFromTables(conversationId);
+    }
+    setMessages(await normalizeMessageRows(rows));
+    if (rows.length) markConversationRead(conversationId);
   }
 
   useEffect(() => {
@@ -1325,7 +1348,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   async function sendMessage(event) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text) return;
+    if (!text || sendingMessage || uploadingAttachment) return;
     if (!activeConversationId) {
       setChatError("Этот чат пока не подключён к базе. Выберите зарегистрированного пользователя через плюс.");
       return;
@@ -1334,6 +1357,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
       setChatError("Для отправки личных сообщений нужна активная подписка.");
       return;
     }
+    setSendingMessage(true);
     setChatError("");
     try {
       const { data, error } = await supabaseClient.rpc("send_chat_message", {
@@ -1375,6 +1399,8 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
       await loadConversations();
     } catch (error) {
       setChatError(toUserError(error));
+    } finally {
+      setSendingMessage(false);
     }
   }
 
@@ -1575,20 +1601,21 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
                   )}
                 </a>
               ) : null}
+              {!message.text && !message.attachment ? <span className="wa-missing-message">Вложение обновляется...</span> : null}
               <small>{message.time}</small>
             </div>
           )) : <div className="wa-empty"><strong>Сообщений пока нет</strong><span>{emptyText}</span></div>}
         </div>
         {canSendInCurrentChat ? <form className="wa-input" onSubmit={sendMessage}>
-          <button className="wa-attach-button" type="button" disabled={uploadingAttachment} onClick={() => document.getElementById("chat-file-input")?.click()} aria-label="Добавить файл" title="Добавить файл">
+          <button className="wa-attach-button" type="button" disabled={uploadingAttachment || sendingMessage} onClick={() => document.getElementById("chat-file-input")?.click()} aria-label="Добавить файл" title="Добавить файл">
             <span className="wa-attach-glyph" aria-hidden="true">📎</span>
             <svg className="wa-attach-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M21.4 11.1 12 20.5a6 6 0 0 1-8.5-8.5l9.4-9.4a4 4 0 0 1 5.7 5.7l-9.4 9.4a2 2 0 0 1-2.8-2.8l8.8-8.8" />
             </svg>
           </button>
           <input id="chat-file-input" className="wa-file-input" type="file" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" onChange={chooseAttachment} />
-          <textarea value={draft} disabled={uploadingAttachment} onChange={(event) => setDraft(event.target.value)} onKeyDown={submitDraftFromKeyboard} placeholder={uploadingAttachment ? "Загружаем файл..." : "Напишите сообщение..."} />
-          <button className="wa-send-button" type="submit" disabled={uploadingAttachment} aria-label="Отправить сообщение">↑</button>
+          <textarea value={draft} disabled={uploadingAttachment || sendingMessage} onChange={(event) => setDraft(event.target.value)} onKeyDown={submitDraftFromKeyboard} placeholder={uploadingAttachment ? "Загружаем файл..." : "Напишите сообщение..."} />
+          <button className="wa-send-button" type="submit" disabled={uploadingAttachment || sendingMessage} aria-label="Отправить сообщение">↑</button>
         </form> : <div className="wa-readonly">{readonlyText}</div>}
       </section>
     </div>
