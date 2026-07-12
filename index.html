@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=20260712-attachment-history" />
+  <link rel="stylesheet" href="styles.css?v=20260712-chat-speed" />
   </head>
   <body>
     <div id="app">
@@ -39,8 +39,8 @@
     </noscript>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="src/supabase-config.js"></script>
-    <script src="src/async-utils.js?v=20260712-attachment-history"></script>
-    <script src="src/chat-utils.js?v=20260712-attachment-history"></script>
+    <script src="src/async-utils.js?v=20260712-chat-speed"></script>
+    <script src="src/chat-utils.js?v=20260712-chat-speed"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.26.10/babel.min.js"></script>
@@ -74,6 +74,8 @@ const SPORTS = ["Все виды спорта", "Футбол", "Йога", "Д�
 const AGES = ["Любой возраст", "0+", "6+", "12+", "16+"];
 const DEFAULT_EVENT_FILTERS = { area: "Все районы", type: "Все мероприятия", sport: "Все виды спорта", age: "Любой возраст", q: "" };
 const CHAT_LOAD_TIMEOUT_MS = 8000;
+const CHAT_REFRESH_MS = 15000;
+const CHAT_DIALOG_CACHE_PREFIX = "hurma-chat-dialogs-v1:";
 
 const EXECUTORS = [
   {
@@ -231,6 +233,21 @@ function loadSaved() {
 
 function saveSaved(state) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function loadChatDialogCache(userId) {
+  if (!userId) return [];
+  try {
+    const cached = JSON.parse(localStorage.getItem(`${CHAT_DIALOG_CACHE_PREFIX}${userId}`)) || [];
+    return Array.isArray(cached) ? cached : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveChatDialogCache(userId, dialogs) {
+  if (!userId) return;
+  localStorage.setItem(`${CHAT_DIALOG_CACHE_PREFIX}${userId}`, JSON.stringify(dialogs || []));
 }
 
 function areaOptions(city) {
@@ -1053,7 +1070,9 @@ function Afisha({ user, onRequireSubscription, sourceEvents, eventsLoading, even
 }
 
 function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, externalConversationFallbacks = {} }) {
-  const [conversations, setConversations] = useState([]);
+  const [conversations, setConversations] = useState(() => (
+    user && !user.isGuest ? loadChatDialogCache(user.id) : []
+  ));
   const [contacts, setContacts] = useState([]);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
@@ -1070,6 +1089,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   const [sendingMessage, setSendingMessage] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const messageLoadRef = useRef(0);
+  const conversationsLoadedRef = useRef(conversations.length > 0);
   const messagesListRef = useRef(null);
   const activeConversationId = chatId.startsWith("conversation:") ? chatId.replace("conversation:", "") : "";
   const executorId = chatId.startsWith("executor:") ? chatId.replace("executor:", "") : "";
@@ -1200,7 +1220,8 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
       setConversations([]);
       return;
     }
-    setLoadingChats(true);
+    const showLoading = !conversationsLoadedRef.current;
+    if (showLoading) setLoadingChats(true);
     try {
       const { data: rpcDialogs, error: rpcError } = await withTimeout(
         supabaseClient.rpc("list_my_conversations"),
@@ -1208,7 +1229,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
         "Чаты загружаются слишком долго. Показываем доступные чаты, попробуйте обновить позже."
       );
       if (!rpcError && Array.isArray(rpcDialogs) && rpcDialogs.length) {
-        setConversations(rpcDialogs.map((item) => ({
+        const mappedDialogs = rpcDialogs.map((item) => ({
           id: item.conversation_id,
           title: item.title || "Чат",
           subtitle: item.subtitle || "Личная переписка",
@@ -1218,17 +1239,22 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
           unreadCount: Number(item.unread_count || 0),
           hasMessages: Boolean(item.last_message_body),
           lastMessageAt: item.last_message_at || item.updated_at,
-        })));
+        }));
+        setConversations(mappedDialogs);
+        conversationsLoadedRef.current = true;
+        saveChatDialogCache(user.id, mappedDialogs);
         return;
       }
 
       const mapped = await loadConversationsFromTables();
       setConversations(mapped);
+      conversationsLoadedRef.current = true;
+      saveChatDialogCache(user.id, mapped);
     } catch (error) {
-      setConversations([]);
+      if (!conversationsLoadedRef.current) setConversations([]);
       setChatError(toUserError(error));
     } finally {
-      setLoadingChats(false);
+      if (showLoading) setLoadingChats(false);
     }
   }
 
@@ -1285,7 +1311,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     loadConversations();
     loadContacts();
     if (!canUseDatabaseChat) return undefined;
-    const refreshId = window.setInterval(loadConversations, 5000);
+    const refreshId = window.setInterval(loadConversations, CHAT_REFRESH_MS);
     return () => window.clearInterval(refreshId);
   }, [user && user.id]);
 
