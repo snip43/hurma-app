@@ -1075,14 +1075,29 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     return `${(bytes / 1024 / 1024).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} МБ`;
   }
 
+  async function getAttachmentPreviewUrl(message) {
+    if (!message?.attachment_path) return "";
+    const { data, error } = await supabaseClient.storage
+      .from(attachmentBucket)
+      .createSignedUrl(message.attachment_path, 60 * 60);
+    if (!error && data?.signedUrl) return data.signedUrl;
+
+    const type = String(message.attachment_type || "");
+    if (!type.startsWith("image/") && !type.startsWith("video/")) return "";
+
+    const { data: blob, error: downloadError } = await supabaseClient.storage
+      .from(attachmentBucket)
+      .download(message.attachment_path);
+    if (downloadError || !blob) return "";
+
+    return URL.createObjectURL(blob);
+  }
+
   async function withSignedAttachmentUrls(rows) {
     const messagesWithFiles = (rows || []).filter((message) => message.attachment_path);
     if (!messagesWithFiles.length) return rows || [];
     const signedUrls = await Promise.all(messagesWithFiles.map(async (message) => {
-      const { data, error } = await supabaseClient.storage
-        .from(attachmentBucket)
-        .createSignedUrl(message.attachment_path, 60 * 60);
-      return [message.attachment_path, error ? "" : (data?.signedUrl || "")];
+      return [message.attachment_path, await getAttachmentPreviewUrl(message)];
     }));
     const signedByPath = Object.fromEntries(signedUrls);
     return (rows || []).map((message) => (
@@ -1611,9 +1626,11 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
             <div className={`wa-bubble ${message.me ? "mine" : ""}`} key={message.id || index}>
               {message.text ? <span>{message.text}</span> : null}
               {message.attachment ? (
-                <a className="wa-attachment" href={message.attachment.url || "#"} target="_blank" rel="noreferrer" download={message.attachment.name}>
+                <div className="wa-attachment">
                   {message.attachment.type.startsWith("image/") && message.attachment.url ? (
-                    <img className="wa-attachment-image" src={message.attachment.url} alt={message.attachment.name} />
+                    <a className="wa-attachment-preview" href={message.attachment.url} target="_blank" rel="noreferrer">
+                      <img className="wa-attachment-image" src={message.attachment.url} alt={message.attachment.name} />
+                    </a>
                   ) : message.attachment.type.startsWith("video/") && message.attachment.url ? (
                     <video className="wa-attachment-video" src={message.attachment.url} controls />
                   ) : (
@@ -1625,7 +1642,10 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
                       </span>
                     </span>
                   )}
-                </a>
+                  {message.attachment.url ? (
+                    <a className="wa-attachment-download" href={message.attachment.url} target="_blank" rel="noreferrer" download={message.attachment.name}>Скачать</a>
+                  ) : null}
+                </div>
               ) : null}
               {!message.text && !message.attachment ? <span className="wa-missing-message">Вложение обновляется...</span> : null}
               <small>{message.time}</small>
