@@ -1144,7 +1144,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
         CHAT_LOAD_TIMEOUT_MS,
         "Чаты загружаются слишком долго. Показываем доступные чаты, попробуйте обновить позже."
       );
-      if (!rpcError && Array.isArray(rpcDialogs)) {
+      if (!rpcError && Array.isArray(rpcDialogs) && rpcDialogs.length) {
         setConversations(rpcDialogs.map((item) => ({
           id: item.conversation_id,
           title: item.title || "Чат",
@@ -1581,6 +1581,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
         </div>
         {canSendInCurrentChat ? <form className="wa-input" onSubmit={sendMessage}>
           <button className="wa-attach-button" type="button" disabled={uploadingAttachment} onClick={() => document.getElementById("chat-file-input")?.click()} aria-label="Добавить файл" title="Добавить файл">
+            <span className="wa-attach-glyph" aria-hidden="true">📎</span>
             <svg className="wa-attach-icon" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M21.4 11.1 12 20.5a6 6 0 0 1-8.5-8.5l9.4-9.4a4 4 0 0 1 5.7 5.7l-9.4 9.4a2 2 0 0 1-2.8-2.8l8.8-8.8" />
             </svg>
