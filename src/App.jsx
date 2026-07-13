@@ -362,6 +362,29 @@ function LoadingScreen() {
   );
 }
 
+function preloadImage(src) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      if (image.decode) {
+        image.decode().then(resolve).catch(resolve);
+      } else {
+        resolve();
+      }
+    };
+    image.onerror = resolve;
+    image.src = src;
+  });
+}
+
+async function preloadStartupAssets() {
+  const timeout = new Promise((resolve) => setTimeout(resolve, 3500));
+  const tasks = [preloadImage("assets/hurghada-hero.png")];
+  if (document.fonts?.ready) tasks.push(document.fonts.ready.catch(() => {}));
+  await Promise.race([Promise.all(tasks), timeout]);
+}
+
 function AuthChoice({ onLogin, onRegister, onGuest }) {
   return (
     <section className="auth-layout">
@@ -1940,6 +1963,7 @@ function App() {
     let active = true;
     async function initialize() {
       const delay = new Promise((resolve) => setTimeout(resolve, 1800));
+      const assetsReady = preloadStartupAssets();
       try {
         if (supabaseClient) {
           const { data: { session } } = await supabaseClient.auth.getSession();
@@ -1950,7 +1974,7 @@ function App() {
       } catch (error) {
         console.error("Supabase session error", error);
       }
-      await delay;
+      await Promise.all([delay, assetsReady]);
       if (active) setLoading(false);
     }
     initialize();
