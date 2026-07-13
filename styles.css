@@ -815,6 +815,12 @@ button {
   padding: 0 13px;
 }
 
+.profile-email-field input[readonly] {
+  background: rgba(8, 122, 119, 0.06);
+  color: #245765;
+  cursor: text;
+}
+
 .field textarea,
 .chat-input textarea {
   min-height: 108px;

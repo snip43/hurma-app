@@ -1897,6 +1897,7 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
             <label className="field"><span>Имя</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
             <label className="field"><span>Город</span><select value={draft.city} onChange={(event) => change("city", event.target.value)}>{Object.keys(CITIES).map((city) => <option key={city}>{city}</option>)}</select></label>
           </div>
+          <label className="field profile-email-field"><span>Email аккаунта</span><input value={draft.email || "Email не указан"} readOnly /></label>
           <label className="field"><span>Район поиска</span><select value={draft.searchArea} onChange={(event) => change("searchArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
           <button className="primary" type="submit" disabled={locked}>Сохранить профиль</button>
           <button className="ghost profile-back-button" type="button" onClick={onBack}>Назад</button>
