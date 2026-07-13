@@ -2137,6 +2137,83 @@ button {
   z-index: 5;
 }
 
+.wa-input.has-attachment {
+  grid-template-rows: auto auto;
+}
+
+.wa-selected-attachment {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(7, 94, 84, 0.14);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(32, 33, 36, 0.08);
+}
+
+.wa-selected-attachment img,
+.wa-selected-attachment video,
+.wa-selected-file-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+}
+
+.wa-selected-attachment img,
+.wa-selected-attachment video {
+  object-fit: cover;
+  background: #eef1ed;
+}
+
+.wa-selected-file-icon {
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: #128c7e;
+  font-size: 20px;
+}
+
+.wa-selected-attachment span {
+  min-width: 0;
+}
+
+.wa-selected-attachment strong,
+.wa-selected-attachment small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wa-selected-attachment strong {
+  color: #202124;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.wa-selected-attachment small {
+  color: #6d7069;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.wa-selected-attachment button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  color: #075e54;
+  background: rgba(7, 94, 84, 0.08);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1;
+}
+
 .wa-attach-button,
 .wa-send-button,
 .wa-input textarea {

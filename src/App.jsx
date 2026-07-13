@@ -1041,11 +1041,13 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   const [loadingChats, setLoadingChats] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [selectedAttachment, setSelectedAttachment] = useState(null);
   const messageLoadRef = useRef(0);
   const conversationsLoadedRef = useRef(conversations.length > 0);
   const messagesListRef = useRef(null);
   const instantScrollRef = useRef(false);
   const messagesConversationRef = useRef("");
+  const selectedAttachmentRef = useRef(null);
   const activeConversationId = chatId.startsWith("conversation:") ? chatId.replace("conversation:", "") : "";
   const executorId = chatId.startsWith("executor:") ? chatId.replace("executor:", "") : "";
   const executor = EXECUTORS.find((item) => item.id === executorId);
@@ -1075,6 +1077,18 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     if (bytes < 1024) return `${bytes} Б`;
     if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`;
     return `${(bytes / 1024 / 1024).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} МБ`;
+  }
+
+  function setPickedAttachment(nextAttachment) {
+    const previousAttachment = selectedAttachmentRef.current;
+    if (previousAttachment?.previewUrl) URL.revokeObjectURL(previousAttachment.previewUrl);
+    selectedAttachmentRef.current = nextAttachment;
+    setSelectedAttachment(nextAttachment);
+  }
+
+  function clearSelectedAttachment() {
+    setPickedAttachment(null);
+    setChatInfo("");
   }
 
   async function getAttachmentPreviewUrl(message) {
@@ -1306,6 +1320,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     setChatError("");
     setChatInfo("");
     setDraft("");
+    clearSelectedAttachment();
     instantScrollRef.current = Boolean(activeConversationId);
     if (activeConversationId) loadMessages(activeConversationId);
     else {
@@ -1414,7 +1429,8 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   async function sendMessage(event) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text || sendingMessage || uploadingAttachment) return;
+    const pendingAttachment = selectedAttachmentRef.current;
+    if ((!text && !pendingAttachment) || sendingMessage || uploadingAttachment) return;
     if (!activeConversationId) {
       setChatError("Этот чат пока не подключён к базе. Выберите зарегистрированного пользователя через плюс.");
       return;
@@ -1424,8 +1440,49 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
       return;
     }
     setSendingMessage(true);
+    setUploadingAttachment(Boolean(pendingAttachment));
     setChatError("");
     try {
+      if (pendingAttachment) {
+        setChatInfo("Отправляем файл...");
+        const file = pendingAttachment.file;
+        const storagePath = `${user.id}/${activeConversationId}/${Date.now()}-${safeFileName(file.name)}`;
+        const { error: uploadError } = await supabaseClient.storage
+          .from(attachmentBucket)
+          .upload(storagePath, file, {
+            cacheControl: "3600",
+            contentType: file.type || "application/octet-stream",
+            upsert: false,
+          });
+        if (uploadError) {
+          setChatError(toUserError(uploadError));
+          return;
+        }
+
+        const { data, error } = await supabaseClient.rpc("send_chat_message_with_attachment", {
+          target_conversation_id: activeConversationId,
+          message_body: text,
+          p_attachment_path: storagePath,
+          p_attachment_name: file.name,
+          p_attachment_type: file.type || "application/octet-stream",
+          p_attachment_size: file.size,
+        });
+        if (error) {
+          setChatError(toUserError(error));
+          await supabaseClient.storage.from(attachmentBucket).remove([storagePath]);
+          return;
+        }
+
+        const signedMessages = await withSignedAttachmentUrls([data]);
+        messageLoadRef.current += 1;
+        setDraft("");
+        clearSelectedAttachment();
+        setMessages((items) => upsertChatMessage(items, normalizeChatMessage(signedMessages[0], user.id, text)));
+        setChatInfo("");
+        await loadConversations();
+        return;
+      }
+
       const { data, error } = await supabaseClient.rpc("send_chat_message", {
         target_conversation_id: activeConversationId,
         message_body: text,
@@ -1467,6 +1524,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
       setChatError(toUserError(error));
     } finally {
       setSendingMessage(false);
+      setUploadingAttachment(false);
     }
   }
 
@@ -1494,47 +1552,19 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
       setChatError("Файл слишком большой. Сейчас можно отправлять файлы до 25 МБ.");
       return;
     }
-    setUploadingAttachment(true);
     setChatError("");
-    setChatInfo("Загружаем файл...");
-    const storagePath = `${user.id}/${activeConversationId}/${Date.now()}-${safeFileName(file.name)}`;
-    try {
-      const { error: uploadError } = await supabaseClient.storage
-        .from(attachmentBucket)
-        .upload(storagePath, file, {
-          cacheControl: "3600",
-          contentType: file.type || "application/octet-stream",
-          upsert: false,
-        });
-      if (uploadError) {
-        setChatError(toUserError(uploadError));
-        return;
-      }
-
-      const { data, error } = await supabaseClient.rpc("send_chat_message_with_attachment", {
-        target_conversation_id: activeConversationId,
-        message_body: "",
-        p_attachment_path: storagePath,
-        p_attachment_name: file.name,
-        p_attachment_type: file.type || "application/octet-stream",
-        p_attachment_size: file.size,
-      });
-      if (error) {
-        setChatError(toUserError(error));
-        await supabaseClient.storage.from(attachmentBucket).remove([storagePath]);
-        return;
-      }
-
-      const signedMessages = await withSignedAttachmentUrls([data]);
-      messageLoadRef.current += 1;
-      setMessages((items) => upsertChatMessage(items, normalizeChatMessage(signedMessages[0], user.id)));
-      setChatInfo("");
-      await loadConversations();
-    } catch (error) {
-      setChatError(toUserError(error));
-    } finally {
-      setUploadingAttachment(false);
-    }
+    setChatInfo("Файл прикреплён. Можно добавить подпись и нажать отправить.");
+    const type = file.type || "application/octet-stream";
+    const previewUrl = type.startsWith("image/") || type.startsWith("video/")
+      ? URL.createObjectURL(file)
+      : "";
+    setPickedAttachment({
+      file,
+      name: file.name,
+      type,
+      size: file.size,
+      previewUrl,
+    });
   }
 
   const databaseDialogs = conversations.map((item) => ({ ...item, chatId: `conversation:${item.id}` }));
@@ -1677,7 +1707,23 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
             </div>
           )) : <div className="wa-empty"><strong>Сообщений пока нет</strong><span>{emptyText}</span></div>}
         </div>
-        {canSendInCurrentChat ? <form className="wa-input" onSubmit={sendMessage}>
+        {canSendInCurrentChat ? <form className={`wa-input ${selectedAttachment ? "has-attachment" : ""}`} onSubmit={sendMessage}>
+          {selectedAttachment ? (
+            <div className="wa-selected-attachment">
+              {selectedAttachment.type.startsWith("image/") && selectedAttachment.previewUrl ? (
+                <img src={selectedAttachment.previewUrl} alt={selectedAttachment.name} />
+              ) : selectedAttachment.type.startsWith("video/") && selectedAttachment.previewUrl ? (
+                <video src={selectedAttachment.previewUrl} muted />
+              ) : (
+                <span className="wa-selected-file-icon">📎</span>
+              )}
+              <span>
+                <strong>{selectedAttachment.name}</strong>
+                <small>{formatFileSize(selectedAttachment.size)}</small>
+              </span>
+              <button type="button" onClick={clearSelectedAttachment} aria-label="Убрать файл">×</button>
+            </div>
+          ) : null}
           <button className="wa-attach-button" type="button" disabled={uploadingAttachment || sendingMessage} onClick={() => document.getElementById("chat-file-input")?.click()} aria-label="Добавить файл" title="Добавить файл">
             <span className="wa-attach-glyph" aria-hidden="true">📎</span>
             <svg className="wa-attach-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -1685,8 +1731,8 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
             </svg>
           </button>
           <input id="chat-file-input" className="wa-file-input" type="file" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" onChange={chooseAttachment} />
-          <textarea value={draft} disabled={uploadingAttachment || sendingMessage} onChange={(event) => setDraft(event.target.value)} onKeyDown={submitDraftFromKeyboard} placeholder={uploadingAttachment ? "Загружаем файл..." : "Напишите сообщение..."} />
-          <button className="wa-send-button" type="submit" disabled={uploadingAttachment || sendingMessage} aria-label="Отправить сообщение">↑</button>
+          <textarea value={draft} disabled={uploadingAttachment || sendingMessage} onChange={(event) => setDraft(event.target.value)} onKeyDown={submitDraftFromKeyboard} placeholder={selectedAttachment ? "Добавьте подпись..." : uploadingAttachment ? "Загружаем файл..." : "Напишите сообщение..."} />
+          <button className="wa-send-button" type="submit" disabled={uploadingAttachment || sendingMessage || (!draft.trim() && !selectedAttachment)} aria-label="Отправить сообщение">↑</button>
         </form> : <div className="wa-readonly">{readonlyText}</div>}
       </section>
     </div>
