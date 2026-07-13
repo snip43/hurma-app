@@ -1044,6 +1044,8 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   const messageLoadRef = useRef(0);
   const conversationsLoadedRef = useRef(conversations.length > 0);
   const messagesListRef = useRef(null);
+  const instantScrollRef = useRef(false);
+  const messagesConversationRef = useRef("");
   const activeConversationId = chatId.startsWith("conversation:") ? chatId.replace("conversation:", "") : "";
   const executorId = chatId.startsWith("executor:") ? chatId.replace("executor:", "") : "";
   const executor = EXECUTORS.find((item) => item.id === executorId);
@@ -1120,6 +1122,20 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   async function normalizeMessageRows(rows) {
     const signedMessages = await withSignedAttachmentUrls(rows || []);
     return signedMessages.map((message) => normalizeChatMessage(message, user.id));
+  }
+
+  function scrollMessagesToLatest(instant = false) {
+    const list = messagesListRef.current;
+    if (!list) return;
+    const previousBehavior = list.style.scrollBehavior;
+    if (instant) list.style.scrollBehavior = "auto";
+    list.scrollTop = list.scrollHeight;
+    if (instant) {
+      window.requestAnimationFrame(() => {
+        list.scrollTop = list.scrollHeight;
+        list.style.scrollBehavior = previousBehavior;
+      });
+    }
   }
 
   async function loadConversationsFromTables() {
@@ -1271,7 +1287,10 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     if (hasPossibleStaleAttachmentRow) {
       rows = await loadMessagesFromTables(conversationId);
     }
-    setMessages(await normalizeMessageRows(rows));
+    const normalizedRows = await normalizeMessageRows(rows);
+    if (loadId !== messageLoadRef.current) return;
+    messagesConversationRef.current = conversationId;
+    setMessages(normalizedRows);
     if (rows.length) markConversationRead(conversationId);
   }
 
@@ -1287,19 +1306,25 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     setChatError("");
     setChatInfo("");
     setDraft("");
+    instantScrollRef.current = Boolean(activeConversationId);
     if (activeConversationId) loadMessages(activeConversationId);
-    else setMessages([]);
+    else {
+      messagesConversationRef.current = "";
+      setMessages([]);
+    }
   }, [chatId]);
 
   useEffect(() => {
-    const list = messagesListRef.current;
-    if (!list) return;
-    const scrollToLatest = () => {
-      list.scrollTop = list.scrollHeight;
-      list.lastElementChild?.scrollIntoView({ block: "end" });
-    };
+    const instant = Boolean(
+      instantScrollRef.current
+      && activeConversationId
+      && messagesConversationRef.current === activeConversationId
+      && messages.length
+    );
+    if (instant) instantScrollRef.current = false;
+    const scrollToLatest = () => scrollMessagesToLatest(instant);
     window.requestAnimationFrame(scrollToLatest);
-    window.setTimeout(scrollToLatest, 120);
+    window.setTimeout(scrollToLatest, instant ? 80 : 120);
   }, [chatId, messages.length]);
 
   useEffect(() => {
