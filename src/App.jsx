@@ -1068,6 +1068,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   const messageLoadRef = useRef(0);
   const conversationsLoadedRef = useRef(conversations.length > 0);
   const messagesListRef = useRef(null);
+  const messagesEndRef = useRef(null);
   const instantScrollRef = useRef(false);
   const messagesConversationRef = useRef("");
   const selectedAttachmentRef = useRef(null);
@@ -1167,12 +1168,21 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     const previousBehavior = list.style.scrollBehavior;
     if (instant) list.style.scrollBehavior = "auto";
     list.scrollTop = list.scrollHeight;
+    messagesEndRef.current?.scrollIntoView({ block: "end", behavior: instant ? "auto" : "smooth" });
     if (instant) {
       window.requestAnimationFrame(() => {
         list.scrollTop = list.scrollHeight;
+        messagesEndRef.current?.scrollIntoView({ block: "end", behavior: "auto" });
         list.style.scrollBehavior = previousBehavior;
       });
     }
+  }
+
+  function settleMessagesAtBottom() {
+    scrollMessagesToLatest(true);
+    [50, 140, 320, 700].forEach((delay) => {
+      window.setTimeout(() => scrollMessagesToLatest(true), delay);
+    });
   }
 
   async function loadConversationsFromTables() {
@@ -1363,6 +1373,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     const scrollToLatest = () => scrollMessagesToLatest(instant);
     window.requestAnimationFrame(scrollToLatest);
     window.setTimeout(scrollToLatest, instant ? 80 : 120);
+    if (instant) settleMessagesAtBottom();
   }, [chatId, messages.length]);
 
   useEffect(() => {
@@ -1707,10 +1718,10 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
                 <div className="wa-attachment">
                   {message.attachment.type.startsWith("image/") && message.attachment.url ? (
                     <a className="wa-attachment-preview" href={message.attachment.url} target="_blank" rel="noreferrer">
-                      <img className="wa-attachment-image" src={message.attachment.url} alt={message.attachment.name} />
+                      <img className="wa-attachment-image" src={message.attachment.url} alt={message.attachment.name} onLoad={settleMessagesAtBottom} />
                     </a>
                   ) : message.attachment.type.startsWith("video/") && message.attachment.url ? (
-                    <video className="wa-attachment-video" src={message.attachment.url} controls />
+                    <video className="wa-attachment-video" src={message.attachment.url} controls onLoadedMetadata={settleMessagesAtBottom} />
                   ) : (
                     <span className="wa-attachment-file">
                       <span className="wa-attachment-mark">📎</span>
@@ -1729,6 +1740,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
               <small>{message.time}</small>
             </div>
           )) : <div className="wa-empty"><strong>Сообщений пока нет</strong><span>{emptyText}</span></div>}
+          <div className="wa-message-end" ref={messagesEndRef} aria-hidden="true" />
         </div>
         {canSendInCurrentChat ? <form className={`wa-input ${selectedAttachment ? "has-attachment" : ""}`} onSubmit={sendMessage}>
           {selectedAttachment ? (

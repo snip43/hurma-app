@@ -2025,6 +2025,11 @@ button {
   scrollbar-width: thin;
 }
 
+.wa-message-end {
+  flex: 0 0 1px;
+  width: 100%;
+}
+
 .wa-bubble {
   display: grid;
   gap: 5px;
