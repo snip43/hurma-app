@@ -476,7 +476,7 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
         email,
         password,
         city,
-        searchArea,
+        searchArea: role === "executor" ? "Все" : searchArea,
         category: String(form.get("category") || "Трансфер"),
       });
       if (result && result.error) setError(result.error);
@@ -573,14 +573,16 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
                   ))}
                 </select>
               </label>
-              <label className="field">
-                <span>Район поиска</span>
-                <select name="searchArea" value={searchArea} onChange={(event) => setSearchArea(event.target.value)} required>
-                  {areaOptions(city).map((area) => (
-                    <option key={area}>{area}</option>
-                  ))}
-                </select>
-              </label>
+              {role === "client" ? (
+                <label className="field">
+                  <span>Район поиска</span>
+                  <select name="searchArea" value={searchArea} onChange={(event) => setSearchArea(event.target.value)} required>
+                    {areaOptions(city).map((area) => (
+                      <option key={area}>{area}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               {role === "executor" ? (
                 <label className="field">
                   <span>Сервис</span>

@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preload" href="assets/hurghada-hero.png" as="image" fetchpriority="high" />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260713-profile-email" />
+    <link rel="stylesheet" href="styles.css?v=20260714-auth-executor-compact" />
   </head>
   <body>
     <div id="app">
@@ -524,7 +524,7 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
         email,
         password,
         city,
-        searchArea,
+        searchArea: role === "executor" ? "Все" : searchArea,
         category: String(form.get("category") || "Трансфер"),
       });
       if (result && result.error) setError(result.error);
@@ -621,14 +621,16 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
                   ))}
                 </select>
               </label>
-              <label className="field">
-                <span>Район поиска</span>
-                <select name="searchArea" value={searchArea} onChange={(event) => setSearchArea(event.target.value)} required>
-                  {areaOptions(city).map((area) => (
-                    <option key={area}>{area}</option>
-                  ))}
-                </select>
-              </label>
+              {role === "client" ? (
+                <label className="field">
+                  <span>Район поиска</span>
+                  <select name="searchArea" value={searchArea} onChange={(event) => setSearchArea(event.target.value)} required>
+                    {areaOptions(city).map((area) => (
+                      <option key={area}>{area}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
               {role === "executor" ? (
                 <label className="field">
                   <span>Сервис</span>
