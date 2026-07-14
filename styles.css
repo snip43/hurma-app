@@ -657,6 +657,34 @@ button {
   padding: clamp(16px, 2vw, 22px);
 }
 
+.email-confirmation-panel {
+  text-align: center;
+}
+
+.email-confirmation-panel .section-note {
+  max-width: 420px;
+  margin-inline: auto;
+}
+
+.email-confirmation-panel > .primary,
+.email-confirmation-panel .form .primary,
+.email-confirmation-panel .form .ghost {
+  width: 100%;
+}
+
+.confirmation-mark {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 12px;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #0b8f8b;
+  font-size: 28px;
+  font-weight: 900;
+}
+
 .auth-choice-panel {
   position: absolute;
   top: 28px;

@@ -1,6 +1,7 @@
 const { useEffect, useMemo, useRef, useState } = React;
 const { withTimeout } = window.HurmaAsync;
 const { normalizeContact, buildManualContact, normalizeChatMessage, upsertChatMessage } = window.HurmaChatUtils;
+const { readAuthCallback, cleanAuthCallbackUrl, confirmationErrorMessage } = window.HurmaAuthUtils;
 
 const STORAGE_KEY = "hurma-react-state-v1";
 const supabaseConfig = window.HURMA_SUPABASE || {};
@@ -283,6 +284,48 @@ async function loadSupabaseUser(authUser) {
     subscription,
     subscriptionActive: subscriptionIsActive(subscription),
   };
+}
+
+async function confirmEmailCallback(callback) {
+  if (callback.error) {
+    throw Object.assign(new Error(confirmationErrorMessage(callback)), {
+      code: callback.errorCode,
+    });
+  }
+
+  let authResult = null;
+  if (callback.tokenHash) {
+    const { data, error } = await supabaseClient.auth.verifyOtp({
+      token_hash: callback.tokenHash,
+      type: callback.type || "email",
+    });
+    if (error) throw error;
+    authResult = data;
+  } else if (callback.code) {
+    const { data, error } = await supabaseClient.auth.exchangeCodeForSession(callback.code);
+    if (error) throw error;
+    authResult = data;
+  } else if (callback.accessToken && callback.refreshToken) {
+    const { data, error } = await supabaseClient.auth.setSession({
+      access_token: callback.accessToken,
+      refresh_token: callback.refreshToken,
+    });
+    if (error) throw error;
+    authResult = data;
+  }
+
+  let authUser = authResult?.user || authResult?.session?.user;
+  if (!authUser) {
+    const { data, error } = await supabaseClient.auth.getUser();
+    if (error) throw error;
+    authUser = data.user;
+  }
+  if (!authUser || !(authUser.email_confirmed_at || authUser.confirmed_at)) {
+    throw new Error("Email пока не подтвержден.");
+  }
+
+  await supabaseClient.auth.signOut({ scope: "local" });
+  return authUser;
 }
 
 function toUserError(error) {
@@ -624,6 +667,61 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
             </button>
           </div>
         </form>
+      </div>
+    </section>
+  );
+}
+
+function EmailConfirmationScreen({ result, onLogin, onResend }) {
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+
+  async function resend(event) {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    setPending(true);
+    const response = await onResend(email);
+    setPending(false);
+    if (response.error) setError(response.error);
+    else setMessage(response.info);
+  }
+
+  return (
+    <section className="auth-layout auth-layout-form">
+      <div className="panel auth-panel email-confirmation-panel">
+        {result.status === "processing" ? (
+          <>
+            <h2 className="section-title">Подтверждаем email</h2>
+            <p className="section-note">Пожалуйста, подождите несколько секунд.</p>
+          </>
+        ) : null}
+        {result.status === "success" ? (
+          <>
+            <div className="confirmation-mark" aria-hidden="true">✓</div>
+            <h2 className="section-title">Ваш email подтвержден</h2>
+            <p className="section-note">Теперь вы можете войти в ХурМа с указанным email и паролем.</p>
+            <button className="primary" type="button" onClick={onLogin}>Войти</button>
+          </>
+        ) : null}
+        {result.status === "error" ? (
+          <>
+            <h2 className="section-title">Email не подтвержден</h2>
+            <p className="section-note">{result.message}</p>
+            <form className="form" onSubmit={resend}>
+              <label className="field">
+                <span>Email</span>
+                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required />
+              </label>
+              {error ? <div className="error">{error}</div> : null}
+              {message ? <div className="form-info">{message}</div> : null}
+              <button className="primary" type="submit" disabled={pending}>{pending ? "Отправляем..." : "Отправить новое письмо"}</button>
+              <button className="ghost" type="button" onClick={onLogin}>Перейти ко входу</button>
+            </form>
+          </>
+        ) : null}
       </div>
     </section>
   );
@@ -1975,6 +2073,11 @@ function App() {
   const [appKey, setAppKey] = useState(0);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
   const passwordRecoveryRef = useRef(false);
+  const authCallbackRef = useRef(readAuthCallback(window.location.href));
+  const confirmationFlowRef = useRef(authCallbackRef.current.isEmailConfirmation);
+  const [emailConfirmation, setEmailConfirmation] = useState(
+    confirmationFlowRef.current ? { status: "processing", message: "" } : null
+  );
 
   useEffect(() => {
     let active = true;
@@ -1982,14 +2085,39 @@ function App() {
       const delay = new Promise((resolve) => setTimeout(resolve, 1800));
       const assetsReady = preloadStartupAssets();
       try {
-        if (supabaseClient) {
+        if (confirmationFlowRef.current) {
+          if (!supabaseClient) throw new Error("Supabase не подключен.");
+          await confirmEmailCallback(authCallbackRef.current);
+          if (active) {
+            setUserState(null);
+            setAuthMode("form");
+            setFormMode("login");
+            setEmailConfirmation({ status: "success", message: "" });
+          }
+        } else if (supabaseClient) {
           const { data: { session } } = await supabaseClient.auth.getSession();
           if (session && active) {
             setUserState(await loadSupabaseUser(session.user));
           }
         }
       } catch (error) {
-        console.error("Supabase session error", error);
+        if (confirmationFlowRef.current && active) {
+          const callback = authCallbackRef.current;
+          setEmailConfirmation({
+            status: "error",
+            message: confirmationErrorMessage({
+              ...callback,
+              errorCode: error?.code || callback.errorCode,
+              errorDescription: error?.message || callback.errorDescription,
+            }),
+          });
+        } else {
+          console.error("Supabase session error", error);
+        }
+      } finally {
+        if (confirmationFlowRef.current) {
+          window.history.replaceState({}, document.title, cleanAuthCallbackUrl(window.location.href));
+        }
       }
       await Promise.all([delay, assetsReady]);
       if (active) setLoading(false);
@@ -2006,10 +2134,10 @@ function App() {
             setAuthMode("form");
             setFormMode("login");
           }
-          if (event === "SIGNED_IN" && session && active && !passwordRecoveryRef.current) {
+          if (event === "SIGNED_IN" && session && active && !passwordRecoveryRef.current && !confirmationFlowRef.current) {
             setTimeout(async () => {
               try {
-                if (active && !passwordRecoveryRef.current) {
+                if (active && !passwordRecoveryRef.current && !confirmationFlowRef.current) {
                   setUserState(await loadSupabaseUser(session.user));
                 }
               } catch (error) {
@@ -2101,7 +2229,7 @@ function App() {
       return { ok: true };
     }
     if (!supabaseClient) return { error: "Supabase не подключен." };
-    const authRedirectTo = `${window.location.origin}${window.location.pathname}`;
+    const authRedirectTo = `${window.location.origin}${window.location.pathname}?auth_callback=signup`;
     if (data.mode === "login") {
       const { data: authData, error } = await supabaseClient.auth.signInWithPassword({
         email: data.email,
@@ -2173,8 +2301,21 @@ function App() {
     return { ok: true };
   }
 
+  async function resendConfirmation(email) {
+    if (!supabaseClient) return { error: "Supabase не подключен." };
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const redirectTo = `${window.location.origin}${window.location.pathname}?auth_callback=signup`;
+    const { error } = await supabaseClient.auth.resend({
+      type: "signup",
+      email: normalizedEmail,
+      options: { emailRedirectTo: redirectTo },
+    });
+    if (error) return { error: toUserError(error) };
+    return { info: "Новое письмо отправлено. Проверьте также папку «Спам»." };
+  }
+
   async function resetPassword(email) {
-    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const redirectTo = `${window.location.origin}${window.location.pathname}?auth_callback=recovery`;
     const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
     if (error) return { error: toUserError(error) };
     return { info: "Если аккаунт с таким email существует, письмо со ссылкой уже отправлено. Проверьте также папку «Спам»." };
@@ -2183,10 +2324,23 @@ function App() {
   if (loading) return <LoadingScreen />;
 
   return (
-    <div className={`app-shell ${!user || passwordRecovery ? "auth-screen" : ""}`} key={appKey}>
-      <Header user={passwordRecovery ? null : user} onHome={home} onProfile={openProfileFromHeader} onLogout={logout} />
+    <div className={`app-shell ${!user || passwordRecovery || emailConfirmation ? "auth-screen" : ""}`} key={appKey}>
+      <Header user={passwordRecovery || emailConfirmation ? null : user} onHome={home} onProfile={openProfileFromHeader} onLogout={logout} />
       <main className="main">
-        {passwordRecovery ? (
+        {emailConfirmation ? (
+          <EmailConfirmationScreen
+            result={emailConfirmation}
+            onResend={resendConfirmation}
+            onLogin={() => {
+              confirmationFlowRef.current = false;
+              setEmailConfirmation(null);
+              setUserState(null);
+              setAuthMode("form");
+              setFormMode("login");
+            }}
+          />
+        ) : null}
+        {!emailConfirmation && passwordRecovery ? (
           <PasswordRecoveryForm onComplete={() => {
             passwordRecoveryRef.current = false;
             setPasswordRecovery(false);
@@ -2195,11 +2349,11 @@ function App() {
             setFormMode("login");
           }} />
         ) : null}
-        {!passwordRecovery && !user && authMode === "choice" ? (
+        {!emailConfirmation && !passwordRecovery && !user && authMode === "choice" ? (
           <AuthChoice onLogin={() => { setFormMode("login"); setAuthMode("form"); }} onRegister={() => { setFormMode("register"); setAuthMode("form"); }} onGuest={() => authSubmit({ mode: "guest" })} />
         ) : null}
-        {!passwordRecovery && !user && authMode === "form" ? <AuthForm mode={formMode} setMode={setFormMode} onBack={() => setAuthMode("choice")} onSubmit={authSubmit} onResetPassword={resetPassword} /> : null}
-        {!passwordRecovery && user ? <Workspace user={user} setUser={setUser} onRequireSubscription={() => setModal(true)} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} reloadExecutors={loadExecutors} /> : null}
+        {!emailConfirmation && !passwordRecovery && !user && authMode === "form" ? <AuthForm mode={formMode} setMode={setFormMode} onBack={() => setAuthMode("choice")} onSubmit={authSubmit} onResetPassword={resetPassword} /> : null}
+        {!emailConfirmation && !passwordRecovery && user ? <Workspace user={user} setUser={setUser} onRequireSubscription={() => setModal(true)} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} reloadExecutors={loadExecutors} /> : null}
       </main>
       {modal ? <SubscriptionModal onClose={() => setModal(false)} onRegister={() => { setModal(false); setUser(null); setAuthMode("form"); setFormMode("register"); }} /> : null}
     </div>
