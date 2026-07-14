@@ -543,9 +543,40 @@ button {
 
 .auth-layout-form .auth-panel {
   width: min(560px, 100%);
-  max-height: calc(100svh - 140px);
-  overflow: auto;
-  scrollbar-gutter: stable;
+}
+
+.auth-layout-form .section-title {
+  font-size: clamp(22px, 2.3vw, 26px);
+}
+
+.auth-layout-form .section-note {
+  margin-bottom: 14px;
+}
+
+.auth-layout-form .form {
+  gap: 10px;
+}
+
+.auth-layout-form .field {
+  gap: 5px;
+}
+
+.auth-layout-form .field input,
+.auth-layout-form .field select {
+  min-height: 42px;
+}
+
+.auth-layout-form .role-toggle {
+  gap: 6px;
+}
+
+.auth-layout-form .toggle-option {
+  min-height: 38px;
+}
+
+.auth-layout-form .primary,
+.auth-layout-form .secondary {
+  min-height: 44px;
 }
 
 .intro {
@@ -741,8 +772,8 @@ button {
 
 .auth-back-button {
   justify-self: flex-start;
-  min-height: 36px;
-  margin-bottom: 18px;
+  min-height: 34px;
+  margin-bottom: 12px;
   padding: 0 13px;
   font-size: 14px;
 }
@@ -2699,10 +2730,6 @@ button {
   .auth-layout-form {
     min-height: auto;
     padding-top: 0;
-  }
-
-  .auth-layout-form .auth-panel {
-    max-height: calc(100svh - 32px);
   }
 
   .auth-choice-panel {
