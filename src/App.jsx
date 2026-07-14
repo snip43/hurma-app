@@ -545,9 +545,6 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
   return (
     <section className="auth-layout auth-layout-form">
       <div className="panel auth-panel">
-        <button className="ghost auth-back-button" type="button" onClick={onBack}>
-          Назад
-        </button>
         <h2 className="section-title">{mode === "login" ? "Войти в ХурМа" : "Создать аккаунт"}</h2>
         <p className="section-note">{mode === "login" ? "Выберите роль и войдите в свой кабинет." : "Зарегистрируйтесь или посмотрите сервисы без аккаунта."}</p>
         <form className="form" onSubmit={submit} key={mode}>
@@ -609,9 +606,14 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
           ) : null}
           <div className="error">{error}</div>
           {info ? <div className="form-info">{info}</div> : null}
-          <button className="primary" type="submit" disabled={pending}>
-            {pending ? "Подождите..." : mode === "login" ? "Войти" : "Зарегистрироваться"}
-          </button>
+          <div className="auth-submit-row">
+            <button className="ghost auth-back-button" type="button" onClick={onBack}>
+              Назад
+            </button>
+            <button className="primary" type="submit" disabled={pending}>
+              {pending ? "Подождите..." : mode === "login" ? "Войти" : "Зарегистрироваться"}
+            </button>
+          </div>
           <button className="secondary" type="button" onClick={() => onSubmit({ mode: "guest" })}>
             Продолжить без регистрации
           </button>
