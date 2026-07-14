@@ -821,6 +821,19 @@ button {
   width: 100%;
 }
 
+.auth-secondary-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.34fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.auth-secondary-row .auth-back-button,
+.auth-secondary-row .secondary {
+  justify-self: stretch;
+  width: 100%;
+}
+
 .auth-form-switch {
   display: flex;
   align-items: center;

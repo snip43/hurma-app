@@ -698,17 +698,27 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
           ) : null}
           <div className="error">{error}</div>
           {info ? <div className="form-info">{info}</div> : null}
-          <div className="auth-submit-row">
-            <button className="ghost auth-back-button" type="button" onClick={onBack}>
-              Назад
-            </button>
-            <button className="primary" type="submit" disabled={pending}>
-              {pending ? "Подождите..." : mode === "login" ? "Войти" : "Зарегистрироваться"}
-            </button>
-          </div>
-          <button className="secondary" type="button" onClick={() => onSubmit({ mode: "guest" })}>
-            Продолжить без регистрации
-          </button>
+          {mode === "login" ? (
+            <>
+              <button className="primary" type="submit" disabled={pending}>
+                {pending ? "Подождите..." : "Войти"}
+              </button>
+              <div className="auth-secondary-row">
+                <button className="ghost auth-back-button" type="button" onClick={onBack}>Назад</button>
+                <button className="secondary" type="button" onClick={() => onSubmit({ mode: "guest" })}>Продолжить без регистрации</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="auth-submit-row">
+                <button className="ghost auth-back-button" type="button" onClick={onBack}>Назад</button>
+                <button className="primary" type="submit" disabled={pending}>
+                  {pending ? "Подождите..." : "Зарегистрироваться"}
+                </button>
+              </div>
+              <button className="secondary" type="button" onClick={() => onSubmit({ mode: "guest" })}>Продолжить без регистрации</button>
+            </>
+          )}
           <div className="auth-form-switch">
             <span>{mode === "login" ? "Еще нет аккаунта?" : "Уже есть аккаунт?"}</span>
             <button className="ghost auth-link-button" type="button" onClick={() => setMode(mode === "login" ? "register" : "login")}>
