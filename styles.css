@@ -773,9 +773,24 @@ button {
 .auth-back-button {
   justify-self: flex-start;
   min-height: 34px;
-  margin-bottom: 12px;
   padding: 0 13px;
   font-size: 14px;
+}
+
+.auth-submit-row {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.34fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.auth-submit-row .auth-back-button {
+  justify-self: stretch;
+  width: 100%;
+}
+
+.auth-submit-row .primary {
+  width: 100%;
 }
 
 .auth-form-switch {

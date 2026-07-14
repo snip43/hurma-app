@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preload" href="assets/hurghada-hero.png" as="image" fetchpriority="high" />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260714-auth-no-inner-scroll" />
+    <link rel="stylesheet" href="styles.css?v=20260714-auth-submit-flow" />
   </head>
   <body>
     <div id="app">
@@ -532,11 +532,15 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
         setInfo(result.info);
         if (mode === "register") {
           const defaultCity = Object.keys(CITIES)[0];
+          const successInfo = result.info;
           formElement.reset();
           setEmailValue("");
+          setPasswordValue("");
           setRole("client");
           setCity(defaultCity);
           setSearchArea(areaOptions(defaultCity)[0]);
+          setMode("login");
+          window.setTimeout(() => setInfo(successInfo), 0);
         }
       }
     } catch (submitError) {
@@ -593,9 +597,6 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
   return (
     <section className="auth-layout auth-layout-form">
       <div className="panel auth-panel">
-        <button className="ghost auth-back-button" type="button" onClick={onBack}>
-          Назад
-        </button>
         <h2 className="section-title">{mode === "login" ? "Войти в ХурМа" : "Создать аккаунт"}</h2>
         <p className="section-note">{mode === "login" ? "Выберите роль и войдите в свой кабинет." : "Зарегистрируйтесь или посмотрите сервисы без аккаунта."}</p>
         <form className="form" onSubmit={submit} key={mode}>
@@ -657,9 +658,14 @@ function AuthForm({ mode, setMode, onBack, onSubmit, onResetPassword }) {
           ) : null}
           <div className="error">{error}</div>
           {info ? <div className="form-info">{info}</div> : null}
-          <button className="primary" type="submit" disabled={pending}>
-            {pending ? "Подождите..." : mode === "login" ? "Войти" : "Зарегистрироваться"}
-          </button>
+          <div className="auth-submit-row">
+            <button className="ghost auth-back-button" type="button" onClick={onBack}>
+              Назад
+            </button>
+            <button className="primary" type="submit" disabled={pending}>
+              {pending ? "Подождите..." : mode === "login" ? "Войти" : "Зарегистрироваться"}
+            </button>
+          </div>
           <button className="secondary" type="button" onClick={() => onSubmit({ mode: "guest" })}>
             Продолжить без регистрации
           </button>
