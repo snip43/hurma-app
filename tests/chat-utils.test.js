@@ -21,9 +21,23 @@ test("normalizeContact maps a database profile to a contact card", () => {
     id: "user-1",
     title: "Мария",
     subtitle: "Клиент · Хургада · Marina",
+    avatarUrl: "",
     source: "database",
     canMessage: true,
   });
+});
+
+test("normalizeContact keeps the profile avatar for chat lists", () => {
+  const contact = normalizeContact({
+    id: "user-2",
+    display_name: "Ахмед Саид",
+    role: "executor",
+    city: "Хургада",
+    search_area: "Все",
+    avatar_url: "https://example.test/avatar.webp",
+  });
+
+  assert.equal(contact.avatarUrl, "https://example.test/avatar.webp");
 });
 
 test("normalizeChatMessage maps a database message for the current user", () => {

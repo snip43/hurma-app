@@ -30,6 +30,9 @@ const DEFAULT_EVENT_FILTERS = { area: "Все районы", type: "Все ме�
 const CHAT_LOAD_TIMEOUT_MS = 8000;
 const CHAT_REFRESH_MS = 15000;
 const CHAT_DIALOG_CACHE_PREFIX = "hurma-chat-dialogs-v1:";
+const PROFILE_AVATAR_BUCKET = "profile-avatars";
+const SERVICE_IMAGE_BUCKET = "service-images";
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const EXECUTORS = [
   {
@@ -43,6 +46,11 @@ const EXECUTORS = [
     rating: 4.9,
     about: "Встречаю в аэропорту, помогаю с багажом, поездки по Хургаде, Эль-Гуне и Сахль-Хашиш.",
     skills: ["аэропорт", "детское кресло", "русский язык"],
+    photoUrl: "assets/hurghada-hero.png",
+    routes: [
+      { from: "Аэропорт", to: "Эль-Ахья", price: 10 },
+      { from: "Аэропорт", to: "Эль-Гуна", price: 20 },
+    ],
   },
   {
     id: "transfer-2",
@@ -55,6 +63,11 @@ const EXECUTORS = [
     rating: 4.8,
     about: "Комфортный минивэн, поездки в Каир, Луксор, Эль-Гуну и аэропорт.",
     skills: ["минивэн", "семьи", "межгород"],
+    photoUrl: "assets/hurghada-hero.png",
+    routes: [
+      { from: "Аэропорт", to: "Marina", price: 12 },
+      { from: "Хургада", to: "Эль-Гуна", price: 22 },
+    ],
   },
   {
     id: "clean-1",
@@ -208,6 +221,39 @@ function areaOptions(city) {
   return CITIES[city] || CITIES["Хургада"];
 }
 
+function imageFileError(file, maxMegabytes) {
+  if (!file) return "Выберите фотографию.";
+  if (!IMAGE_TYPES.includes(file.type)) return "Поддерживаются фотографии JPG, PNG и WebP.";
+  if (file.size > maxMegabytes * 1024 * 1024) return `Размер фотографии не должен превышать ${maxMegabytes} МБ.`;
+  return "";
+}
+
+function publicStoragePath(url, bucket) {
+  if (!url) return "";
+  const marker = `/storage/v1/object/public/${bucket}/`;
+  const index = url.indexOf(marker);
+  return index === -1 ? "" : decodeURIComponent(url.slice(index + marker.length));
+}
+
+async function uploadPublicImage(bucket, userId, file, prefix) {
+  const extension = String(file.name || "image.jpg").split(".").pop().toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+  const path = `${userId}/${prefix}-${Date.now()}.${extension}`;
+  const { error } = await supabaseClient.storage.from(bucket).upload(path, file, {
+    cacheControl: "31536000",
+    contentType: file.type,
+    upsert: false,
+  });
+  if (error) throw error;
+  const { data } = supabaseClient.storage.from(bucket).getPublicUrl(path);
+  return { path, url: data.publicUrl };
+}
+
+async function removePublicImage(bucket, url) {
+  const path = publicStoragePath(url, bucket);
+  if (!path) return;
+  await supabaseClient.storage.from(bucket).remove([path]);
+}
+
 function isSubscribed(user) {
   return Boolean(user && !user.isGuest && user.subscriptionActive);
 }
@@ -257,12 +303,14 @@ function mapDatabaseExecutor(executor) {
     rating: Number(executor.rating || 0).toFixed(1),
     about: executor.bio,
     skills: [...(executor.tags || []), ...(executor.languages || [])],
+    photoUrl: executor.photo_url || "",
+    routes: Array.isArray(executor.routes) ? executor.routes : [],
   };
 }
 
 async function loadSupabaseUser(authUser) {
   const [{ data: profile, error: profileError }, { data: subscription, error: subscriptionError }] = await Promise.all([
-    supabaseClient.from("profiles").select("id, display_name, role, city, search_area").eq("id", authUser.id).single(),
+    supabaseClient.from("profiles").select("id, display_name, role, city, search_area, avatar_url").eq("id", authUser.id).single(),
     supabaseClient
       .from("subscriptions")
       .select("status, starts_at, ends_at, auto_renew, plan_code")
@@ -280,6 +328,7 @@ async function loadSupabaseUser(authUser) {
     name: profile.display_name,
     city: profile.city,
     searchArea: profile.search_area || "Marina",
+    avatarUrl: profile.avatar_url || "",
     category: authUser.user_metadata?.category || "Трансфер",
     subscription,
     subscriptionActive: subscriptionIsActive(subscription),
@@ -879,6 +928,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
           id: data,
           title: executor.name,
           subtitle: executor.title || "Личная переписка",
+          avatarUrl: executor.photoUrl || "",
           readonly: false,
           messages: [],
         },
@@ -987,22 +1037,36 @@ function ExecutorList({ service, user, onStartChat, databaseExecutors }) {
       <div className="cards-grid">
         {items.map((executor) => (
           <article className="executor-card" key={executor.id}>
-            <div className="executor-top">
-              <div className="avatar">{executor.name.slice(0, 1)}</div>
-              <div>
-                <h3>{executor.name}</h3>
-                <span>{executor.city} · {executor.area}</span>
-              </div>
-              <strong>{executor.rating}</strong>
+            <div className="executor-photo-wrap">
+              {executor.photoUrl ? <img className="executor-photo" src={executor.photoUrl} alt={`Объявление ${executor.name}`} /> : <div className="executor-photo-placeholder">{executor.name.slice(0, 1)}</div>}
+              <span className="executor-rating">★ {executor.rating}</span>
             </div>
-            <p><strong>{executor.title}</strong></p>
-            <p>{executor.about}</p>
-            <div className="meta">{executor.skills.map((skill) => <span className="tag" key={skill}>{skill}</span>)}</div>
-            <div className="executor-footer">
-              <span className="price">{executor.price}</span>
-              <button className="primary" type="button" onClick={() => onStartChat(executor)}>
-                Написать
-              </button>
+            <div className="executor-card-body">
+              <div className="executor-top">
+                <div>
+                  <h3>{executor.name}</h3>
+                  <span>{[executor.city, executor.area].filter(Boolean).join(" · ")}</span>
+                </div>
+              </div>
+              <p className="executor-title"><strong>{executor.title}</strong></p>
+              <p>{executor.about}</p>
+              {executor.category === "Трансфер" && executor.routes?.length ? (
+                <div className="route-list" aria-label="Популярные маршруты">
+                  {executor.routes.slice(0, 4).map((route, index) => (
+                    <div className="route-row" key={`${route.from}-${route.to}-${index}`}>
+                      <span>{route.from} <b aria-hidden="true">→</b> {route.to}</span>
+                      <strong>{Number(route.price)} $</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <div className="meta">{executor.skills.map((skill) => <span className="tag" key={skill}>{skill}</span>)}</div>
+              <div className="executor-footer">
+                <span className="price">{executor.price}</span>
+                <button className="primary" type="button" onClick={() => onStartChat(executor)}>
+                  Написать
+                </button>
+              </div>
             </div>
           </article>
         ))}
@@ -1304,7 +1368,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
       Promise.all([
         supabaseClient
           .from("conversation_members")
-          .select("conversation_id, user_id, profiles(id, display_name, role, city, search_area)")
+          .select("conversation_id, user_id, profiles(id, display_name, role, city, search_area, avatar_url)")
           .in("conversation_id", conversationIds),
         supabaseClient
           .from("messages")
@@ -1338,6 +1402,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
         id: conversation.id,
         title: isDirect ? (profile?.display_name || conversation.title || "Собеседник") : (conversation.title || "Чат ХурМа"),
         subtitle: isDirect ? [profile?.role === "executor" ? "Исполнитель" : "Клиент", profile?.city, profile?.search_area].filter(Boolean).join(" · ") : (conversation.subtitle || "Групповой чат"),
+        avatarUrl: isDirect ? (profile?.avatar_url || "") : "",
         readonly: conversation.is_readonly,
         preview: previewText,
         time: lastMessage ? formatEventDate(lastMessage.created_at) : "",
@@ -1366,6 +1431,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
           id: item.conversation_id,
           title: item.title || "Чат",
           subtitle: item.subtitle || "Личная переписка",
+          avatarUrl: item.avatar_url || "",
           readonly: item.is_readonly,
           preview: item.last_message_body || "Сообщений пока нет",
           time: item.last_message_at ? formatEventDate(item.last_message_at) : "",
@@ -1395,7 +1461,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
     if (!canUseDatabaseChat) return;
     const { data, error } = await supabaseClient
       .from("profiles")
-      .select("id, display_name, role, city, search_area")
+      .select("id, display_name, role, city, search_area, avatar_url")
       .neq("id", user.id)
       .order("display_name");
     if (error) {
@@ -1519,6 +1585,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
         id: data,
         title: contact.title,
         subtitle: contact.subtitle || "Личная переписка",
+        avatarUrl: contact.avatarUrl || "",
         readonly: false,
         messages: [],
       },
@@ -1746,7 +1813,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
                 }
                 setChatId(item.chatId);
               }}>
-                <div className="wa-avatar">{item.title.slice(0, 1)}</div>
+                <div className={`wa-avatar ${item.avatarUrl ? "has-image" : ""}`} style={item.avatarUrl ? { "--avatar-image": `url("${item.avatarUrl}")` } : undefined}>{item.avatarUrl ? "" : item.title.slice(0, 1)}</div>
                 <div className="wa-dialog-main">
                   <div className="wa-dialog-row">
                     <strong>{item.title}</strong>
@@ -1783,7 +1850,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
               <div className="contact-list">
                 {visibleContacts.map((contact) => (
                   <button className="wa-dialog compact" key={contact.id} type="button" onClick={() => startContactChat(contact)}>
-                    <div className="wa-avatar">{contact.title.slice(0, 1)}</div>
+                    <div className={`wa-avatar ${contact.avatarUrl ? "has-image" : ""}`} style={contact.avatarUrl ? { "--avatar-image": `url("${contact.avatarUrl}")` } : undefined}>{contact.avatarUrl ? "" : contact.title.slice(0, 1)}</div>
                     <div className="wa-dialog-main">
                       <strong>{contact.title}</strong>
                       <span className="wa-dialog-preview">{contact.subtitle}</span>
@@ -1804,7 +1871,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
       <section className="wa-chat">
         <div className="wa-chat-head">
           <button className="wa-mobile-back" type="button" onClick={() => setChatId("")}>←</button>
-          <div className="wa-avatar">{renderedChat.title.slice(0, 1)}</div>
+          <div className={`wa-avatar ${renderedChat.avatarUrl ? "has-image" : ""}`} style={renderedChat.avatarUrl ? { "--avatar-image": `url("${renderedChat.avatarUrl}")` } : undefined}>{renderedChat.avatarUrl ? "" : renderedChat.title.slice(0, 1)}</div>
           <div className="wa-chat-title">
             <strong>{renderedChat.title}</strong>
             <span>{renderedChat.subtitle}</span>
@@ -1879,6 +1946,9 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
 function Profile({ user, setUser, reloadExecutors, onBack }) {
   const [draft, setDraft] = useState(user);
   const [locked, setLocked] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [avatarFile, setAvatarFile] = useState(null);
   const [executorDraft, setExecutorDraft] = useState({
     category: user.category || "Трансфер",
     headline: "",
@@ -1887,19 +1957,33 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
     priceFrom: "",
     languages: "Русский",
     tags: "",
+    photoUrl: "",
+    routes: [{ from: "", to: "", price: "" }],
     isPublished: false,
   });
   const [executorLoading, setExecutorLoading] = useState(user.role === "executor");
   const [executorMessage, setExecutorMessage] = useState("");
   const [executorError, setExecutorError] = useState("");
+  const [publishingExecutor, setPublishingExecutor] = useState(false);
+  const [servicePhotoFile, setServicePhotoFile] = useState(null);
   const areas = areaOptions(draft.city);
+  const avatarPreview = useMemo(() => avatarFile ? URL.createObjectURL(avatarFile) : (draft.avatarUrl || ""), [avatarFile, draft.avatarUrl]);
+  const servicePhotoPreview = useMemo(() => servicePhotoFile ? URL.createObjectURL(servicePhotoFile) : executorDraft.photoUrl, [servicePhotoFile, executorDraft.photoUrl]);
+
+  useEffect(() => () => {
+    if (avatarPreview.startsWith("blob:")) URL.revokeObjectURL(avatarPreview);
+  }, [avatarPreview]);
+
+  useEffect(() => () => {
+    if (servicePhotoPreview.startsWith("blob:")) URL.revokeObjectURL(servicePhotoPreview);
+  }, [servicePhotoPreview]);
 
   useEffect(() => {
     if (user.role !== "executor") return;
     let active = true;
     supabaseClient
       .from("executor_profiles")
-      .select("category, headline, bio, service_area, price_from, languages, tags, is_published")
+      .select("category, headline, bio, service_area, price_from, languages, tags, photo_url, routes, is_published")
       .eq("user_id", user.id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -1915,6 +1999,10 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
             priceFrom: data.price_from == null ? "" : String(data.price_from),
             languages: (data.languages || []).join(", "),
             tags: (data.tags || []).join(", "),
+            photoUrl: data.photo_url || "",
+            routes: Array.isArray(data.routes) && data.routes.length
+              ? data.routes.map((route) => ({ from: route.from || "", to: route.to || "", price: String(route.price ?? "") }))
+              : [{ from: "", to: "", price: "" }],
             isPublished: data.is_published,
           });
         }
@@ -1927,31 +2015,91 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
 
   function change(key, value) {
     setLocked(false);
+    setProfileError("");
     setDraft((current) => {
       const next = { ...current, [key]: value };
       if (key === "city") next.searchArea = areaOptions(value)[0];
       return next;
     });
   }
+
+  function chooseAvatar(event) {
+    const file = event.target.files?.[0];
+    const error = imageFileError(file, 5);
+    setProfileError(error);
+    if (error) {
+      event.target.value = "";
+      return;
+    }
+    setAvatarFile(file);
+    setLocked(false);
+  }
+
   async function save(event) {
     event.preventDefault();
-    const { error } = await supabaseClient
-      .from("profiles")
-      .update({
+    setProfileError("");
+    setSavingProfile(true);
+    let uploaded = null;
+    try {
+      if (avatarFile) uploaded = await uploadPublicImage(PROFILE_AVATAR_BUCKET, user.id, avatarFile, "avatar");
+      const nextAvatarUrl = uploaded?.url || draft.avatarUrl || "";
+      const { error } = await supabaseClient.from("profiles").update({
         display_name: draft.name,
         city: draft.city,
         search_area: draft.searchArea,
-      })
-      .eq("id", user.id);
-    if (error) return;
-    setUser(draft);
-    setLocked(true);
+        avatar_url: nextAvatarUrl || null,
+      }).eq("id", user.id);
+      if (error) throw error;
+      if (uploaded && draft.avatarUrl && draft.avatarUrl !== nextAvatarUrl) {
+        await removePublicImage(PROFILE_AVATAR_BUCKET, draft.avatarUrl);
+      }
+      const nextUser = { ...draft, avatarUrl: nextAvatarUrl };
+      setDraft(nextUser);
+      setUser(nextUser);
+      setAvatarFile(null);
+      setLocked(true);
+    } catch (error) {
+      if (uploaded?.url) await removePublicImage(PROFILE_AVATAR_BUCKET, uploaded.url);
+      setProfileError(toUserError(error));
+    } finally {
+      setSavingProfile(false);
+    }
   }
 
   function changeExecutor(key, value) {
     setExecutorMessage("");
     setExecutorError("");
     setExecutorDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function chooseServicePhoto(event) {
+    const file = event.target.files?.[0];
+    const error = imageFileError(file, 8);
+    setExecutorError(error);
+    if (error) {
+      event.target.value = "";
+      return;
+    }
+    setServicePhotoFile(file);
+  }
+
+  function changeRoute(index, key, value) {
+    setExecutorError("");
+    setExecutorDraft((current) => ({
+      ...current,
+      routes: current.routes.map((route, routeIndex) => routeIndex === index ? { ...route, [key]: value } : route),
+    }));
+  }
+
+  function addRoute() {
+    setExecutorDraft((current) => ({ ...current, routes: [...current.routes, { from: "", to: "", price: "" }] }));
+  }
+
+  function removeRoute(index) {
+    setExecutorDraft((current) => ({
+      ...current,
+      routes: current.routes.length === 1 ? [{ from: "", to: "", price: "" }] : current.routes.filter((_, routeIndex) => routeIndex !== index),
+    }));
   }
 
   async function publishExecutor(event) {
@@ -1962,31 +2110,59 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
       setExecutorError("Заполните заголовок и описание объявления.");
       return;
     }
-    const splitList = (value) => value.split(",").map((item) => item.trim()).filter(Boolean);
-    const payload = {
-      user_id: user.id,
-      display_name: draft.name.trim(),
-      category: executorDraft.category === "Клининг" ? "cleaning" : "transfer",
-      headline: executorDraft.headline.trim(),
-      bio: executorDraft.bio.trim(),
-      city: draft.city,
-      service_area: executorDraft.serviceArea,
-      price_from: executorDraft.priceFrom === "" ? null : Number(executorDraft.priceFrom),
-      currency: "USD",
-      languages: splitList(executorDraft.languages),
-      tags: splitList(executorDraft.tags),
-      is_published: true,
-    };
-    const { error } = await supabaseClient
-      .from("executor_profiles")
-      .upsert(payload, { onConflict: "user_id" });
-    if (error) {
-      setExecutorError(error.message);
+    if (!executorDraft.photoUrl && !servicePhotoFile) {
+      setExecutorError("Добавьте фотографию объявления. Без неё публикация недоступна.");
       return;
     }
-    setExecutorDraft((current) => ({ ...current, isPublished: true }));
-    setExecutorMessage("Объявление опубликовано и появилось в списке исполнителей.");
-    await reloadExecutors();
+    const isTransfer = executorDraft.category === "Трансфер";
+    const activeRoutes = executorDraft.routes.filter((route) => route.from.trim() || route.to.trim() || String(route.price).trim());
+    if (isTransfer && (!activeRoutes.length || activeRoutes.some((route) => !route.from.trim() || !route.to.trim() || Number(route.price) <= 0))) {
+      setExecutorError("Добавьте хотя бы один маршрут: откуда, куда и цена больше нуля.");
+      return;
+    }
+    const splitList = (value) => value.split(",").map((item) => item.trim()).filter(Boolean);
+    const routes = isTransfer
+      ? activeRoutes.map((route) => ({ from: route.from.trim(), to: route.to.trim(), price: Number(route.price) }))
+      : [];
+    let uploaded = null;
+    setPublishingExecutor(true);
+    try {
+      if (servicePhotoFile) uploaded = await uploadPublicImage(SERVICE_IMAGE_BUCKET, user.id, servicePhotoFile, "service");
+      const nextPhotoUrl = uploaded?.url || executorDraft.photoUrl;
+      const routePrices = routes.map((route) => route.price);
+      const payload = {
+        user_id: user.id,
+        display_name: draft.name.trim(),
+        category: executorDraft.category === "Клининг" ? "cleaning" : "transfer",
+        headline: executorDraft.headline.trim(),
+        bio: executorDraft.bio.trim(),
+        city: draft.city,
+        service_area: isTransfer ? null : executorDraft.serviceArea,
+        price_from: isTransfer
+          ? (routePrices.length ? Math.min(...routePrices) : null)
+          : (executorDraft.priceFrom === "" ? null : Number(executorDraft.priceFrom)),
+        currency: "USD",
+        languages: splitList(executorDraft.languages),
+        tags: splitList(executorDraft.tags),
+        photo_url: nextPhotoUrl,
+        routes,
+        is_published: true,
+      };
+      const { error } = await supabaseClient.from("executor_profiles").upsert(payload, { onConflict: "user_id" });
+      if (error) throw error;
+      if (uploaded && executorDraft.photoUrl && executorDraft.photoUrl !== nextPhotoUrl) {
+        await removePublicImage(SERVICE_IMAGE_BUCKET, executorDraft.photoUrl);
+      }
+      setExecutorDraft((current) => ({ ...current, photoUrl: nextPhotoUrl, routes: isTransfer ? routes.map((route) => ({ ...route, price: String(route.price) })) : current.routes, isPublished: true }));
+      setServicePhotoFile(null);
+      setExecutorMessage("Объявление опубликовано и появилось в списке исполнителей.");
+      await reloadExecutors();
+    } catch (error) {
+      if (uploaded?.url) await removePublicImage(SERVICE_IMAGE_BUCKET, uploaded.url);
+      setExecutorError(toUserError(error));
+    } finally {
+      setPublishingExecutor(false);
+    }
   }
 
   return (
@@ -1995,13 +2171,24 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
         <h2 className="section-title">{user.role === "executor" ? "Профиль исполнителя" : "Профиль клиента"}</h2>
         <p className="section-note">Эти данные можно изменить при необходимости.</p>
         <form className="form" onSubmit={save}>
+          <div className="profile-avatar-editor">
+            <div className="profile-avatar-preview">
+              {avatarPreview ? <img src={avatarPreview} alt="Аватар профиля" /> : <span>{draft.name?.slice(0, 1) || "Х"}</span>}
+            </div>
+            <label className="secondary media-picker">
+              <span>{avatarPreview ? "Изменить фотографию" : "Добавить фотографию"}</span>
+              <input type="file" accept={IMAGE_TYPES.join(",")} onChange={chooseAvatar} />
+            </label>
+            <p>Фотография будет видна собеседникам в чатах.</p>
+          </div>
           <div className="two-col">
-            <label className="field"><span>Имя</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
+            <label className="field"><span>Имя и фамилия</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
             <label className="field"><span>Город</span><select value={draft.city} onChange={(event) => change("city", event.target.value)}>{Object.keys(CITIES).map((city) => <option key={city}>{city}</option>)}</select></label>
           </div>
           <label className="field profile-email-field"><span>Email аккаунта</span><input value={draft.email || "Email не указан"} readOnly /></label>
           <label className="field"><span>Район поиска</span><select value={draft.searchArea} onChange={(event) => change("searchArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
-          <button className="primary" type="submit" disabled={locked}>Сохранить профиль</button>
+          {profileError ? <div className="error">{profileError}</div> : null}
+          <button className="primary" type="submit" disabled={locked || savingProfile}>{savingProfile ? "Сохраняем..." : "Сохранить профиль"}</button>
           <button className="ghost profile-back-button" type="button" onClick={onBack}>Назад</button>
         </form>
       </div>
@@ -2019,21 +2206,44 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
           </div>
           {executorLoading ? <div className="form-info">Загружаем объявление...</div> : (
             <form className="form" onSubmit={publishExecutor}>
-              <div className="two-col">
-                <label className="field"><span>Сервис</span><select value={executorDraft.category} onChange={(event) => changeExecutor("category", event.target.value)}><option>Трансфер</option><option>Клининг</option></select></label>
-                <label className="field"><span>Район работы</span><select value={executorDraft.serviceArea} onChange={(event) => changeExecutor("serviceArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
+              <div className="service-photo-editor">
+                <div className="service-photo-preview">
+                  {servicePhotoPreview ? <img src={servicePhotoPreview} alt="Фотография объявления" /> : <span>Добавьте фотографию автомобиля или своей услуги</span>}
+                </div>
+                <label className="secondary media-picker">
+                  <span>{servicePhotoPreview ? "Заменить фотографию" : "Выбрать фотографию"}</span>
+                  <input type="file" accept={IMAGE_TYPES.join(",")} onChange={chooseServicePhoto} />
+                </label>
+                <small>Обязательное поле · JPG, PNG или WebP · до 8 МБ</small>
               </div>
+              <label className="field"><span>Сервис</span><select value={executorDraft.category} onChange={(event) => changeExecutor("category", event.target.value)}><option>Трансфер</option><option>Клининг</option></select></label>
+              {executorDraft.category === "Клининг" ? <label className="field"><span>Район работы</span><select value={executorDraft.serviceArea} onChange={(event) => changeExecutor("serviceArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label> : null}
               <label className="field"><span>Заголовок объявления</span><input value={executorDraft.headline} onChange={(event) => changeExecutor("headline", event.target.value)} placeholder="Например, трансфер из аэропорта и поездки по городу" /></label>
               <label className="field"><span>Описание услуг</span><textarea value={executorDraft.bio} onChange={(event) => changeExecutor("bio", event.target.value)} placeholder="Расскажите об автомобиле, маршрутах и условиях работы" /></label>
+              {executorDraft.category === "Трансфер" ? (
+                <fieldset className="route-editor">
+                  <legend>Популярные маршруты и цены</legend>
+                  <p>Клиент увидит эти варианты прямо в карточке объявления.</p>
+                  {executorDraft.routes.map((route, index) => (
+                    <div className="route-edit-row" key={index}>
+                      <label><span>Откуда</span><input value={route.from} onChange={(event) => changeRoute(index, "from", event.target.value)} placeholder="Аэропорт" /></label>
+                      <label><span>Куда</span><input value={route.to} onChange={(event) => changeRoute(index, "to", event.target.value)} placeholder="Эль-Ахья" /></label>
+                      <label><span>Цена, $</span><input type="number" min="1" step="1" value={route.price} onChange={(event) => changeRoute(index, "price", event.target.value)} placeholder="10" /></label>
+                      <button className="ghost route-remove" type="button" onClick={() => removeRoute(index)} aria-label="Удалить маршрут">×</button>
+                    </div>
+                  ))}
+                  <button className="secondary route-add" type="button" onClick={addRoute}>Добавить маршрут</button>
+                </fieldset>
+              ) : null}
               <div className="two-col">
-                <label className="field"><span>Цена от, $</span><input type="number" min="0" step="1" value={executorDraft.priceFrom} onChange={(event) => changeExecutor("priceFrom", event.target.value)} placeholder="12" /></label>
+                {executorDraft.category === "Клининг" ? <label className="field"><span>Цена от, $</span><input type="number" min="0" step="1" value={executorDraft.priceFrom} onChange={(event) => changeExecutor("priceFrom", event.target.value)} placeholder="20" /></label> : null}
                 <label className="field"><span>Языки через запятую</span><input value={executorDraft.languages} onChange={(event) => changeExecutor("languages", event.target.value)} placeholder="Русский, Английский, Арабский" /></label>
               </div>
               <label className="field"><span>Особенности через запятую</span><input value={executorDraft.tags} onChange={(event) => changeExecutor("tags", event.target.value)} placeholder="Аэропорт, детское кресло, минивэн" /></label>
               {executorError ? <div className="error">{executorError}</div> : null}
               {executorMessage ? <div className="form-info">{executorMessage}</div> : null}
-              <button className="primary publish-button" type="submit">
-                {executorDraft.isPublished ? "Обновить объявление" : "Разместить объявление"}
+              <button className="primary publish-button" type="submit" disabled={publishingExecutor}>
+                {publishingExecutor ? "Публикуем..." : executorDraft.isPublished ? "Обновить объявление" : "Разместить объявление"}
               </button>
             </form>
           )}
@@ -2158,7 +2368,7 @@ function App() {
     if (!supabaseClient) return;
     const { data, error } = await supabaseClient
       .from("executor_profiles")
-      .select("user_id, display_name, category, headline, bio, city, service_area, price_from, languages, tags, rating")
+      .select("user_id, display_name, category, headline, bio, city, service_area, price_from, languages, tags, rating, photo_url, routes")
       .eq("is_published", true)
       .order("created_at", { ascending: false });
     if (!error) setDatabaseExecutors(data.map(mapDatabaseExecutor));

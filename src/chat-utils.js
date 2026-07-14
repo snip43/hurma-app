@@ -13,6 +13,7 @@
       id: profile.id,
       title,
       subtitle: compact([roleLabel(profile.role), profile.city, profile.search_area || profile.searchArea]),
+      avatarUrl: profile.avatar_url || profile.avatarUrl || "",
       source: "database",
       canMessage: true,
     };
