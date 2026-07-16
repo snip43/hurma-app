@@ -877,6 +877,133 @@ function ChatMenu({ onServices, onChat }) {
   );
 }
 
+function ExecutorDashboard({ user, onChat, onProfile, databaseExecutors }) {
+  const [cabinetView, setCabinetView] = useState("home");
+  const [cabinetData, setCabinetData] = useState({ published: false, headline: "", requests: [], loading: true, error: "" });
+  const isCleaning = user.category === "Клининг";
+  const serviceName = isCleaning ? "Клининг" : "Трансфер";
+  const serviceIcon = SERVICE_ICONS[serviceName];
+
+  async function loadCabinet() {
+    if (!supabaseClient || !user?.id || user.isGuest) {
+      setCabinetData((current) => ({ ...current, loading: false }));
+      return;
+    }
+    setCabinetData((current) => ({ ...current, loading: true, error: "" }));
+    const [{ data: profile, error: profileError }, { data: requests, error: requestsError }] = await Promise.all([
+      supabaseClient.from("executor_profiles").select("is_published, headline").eq("user_id", user.id).maybeSingle(),
+      supabaseClient.from("requests").select("id, client_id, comment, status, created_at").eq("executor_id", user.id).order("created_at", { ascending: false }).limit(30),
+    ]);
+    if (profileError || requestsError) {
+      setCabinetData({ published: Boolean(profile?.is_published), headline: profile?.headline || "", requests: [], loading: false, error: "Не удалось загрузить заявки. Попробуйте обновить страницу." });
+      return;
+    }
+    const clientIds = [...new Set((requests || []).map((request) => request.client_id).filter(Boolean))];
+    let clients = [];
+    if (clientIds.length) {
+      const { data } = await supabaseClient.from("profiles").select("id, display_name, city, search_area").in("id", clientIds);
+      clients = data || [];
+    }
+    const clientById = Object.fromEntries(clients.map((client) => [client.id, client]));
+    setCabinetData({
+      published: Boolean(profile?.is_published),
+      headline: profile?.headline || "",
+      requests: (requests || []).map((request) => ({ ...request, client: clientById[request.client_id] || null })),
+      loading: false,
+      error: "",
+    });
+  }
+
+  useEffect(() => {
+    loadCabinet();
+  }, [user?.id]);
+
+  async function updateRequest(requestId, status) {
+    const { error } = await supabaseClient.rpc("set_executor_request_status", {
+      request_id: requestId,
+      next_status: status,
+    });
+    if (error) {
+      setCabinetData((current) => ({ ...current, error: toUserError(error) }));
+      return;
+    }
+    setCabinetData((current) => ({
+      ...current,
+      requests: current.requests.map((request) => request.id === requestId ? { ...request, status } : request),
+    }));
+  }
+
+  const newRequests = cabinetData.requests.filter((request) => request.status === "new").length;
+  const activeRequests = cabinetData.requests.filter((request) => ["new", "accepted"].includes(request.status)).length;
+  const statusLabels = { new: "Новая", accepted: "Принята", declined: "Отклонена", cancelled: "Отменена", completed: "Завершена" };
+  const requestDate = (value) => value ? new Date(value).toLocaleDateString("ru-RU", { day: "numeric", month: "short" }) : "";
+
+  function CabinetCard({ icon, title, subtitle, onClick, badge }) {
+    return (
+      <button className="executor-cabinet-card" type="button" onClick={onClick}>
+        <span className="executor-cabinet-card-icon" aria-hidden="true">{icon}</span>
+        <span className="executor-cabinet-card-copy"><strong>{title}</strong><small>{subtitle}</small></span>
+        {badge ? <span className="executor-cabinet-badge">{badge}</span> : <span className="executor-cabinet-arrow" aria-hidden="true">›</span>}
+      </button>
+    );
+  }
+
+  return (
+    <div className="executor-cabinet">
+      <section className="panel executor-cabinet-hero">
+        <div className="executor-cabinet-hero-copy">
+          <span className="executor-cabinet-kicker"><span aria-hidden="true">{serviceIcon}</span> Кабинет исполнителя</span>
+          <h1>{user.name}</h1>
+          <p>{isCleaning ? "Управляйте услугами клининга и заявками на уборку." : "Управляйте маршрутами, объявлениями и заявками на трансфер."}</p>
+        </div>
+        <div className={`executor-publication-card ${cabinetData.published ? "is-published" : ""}`}>
+          <span>{cabinetData.published ? "Ваше объявление опубликовано" : "Объявление еще не опубликовано"}</span>
+          <strong>{cabinetData.published ? (cabinetData.headline || serviceName) : "Добавьте услугу, чтобы вас нашли клиенты"}</strong>
+          <button className="secondary" type="button" onClick={onProfile}>{cabinetData.published ? "Редактировать" : "Создать объявление"}</button>
+        </div>
+      </section>
+
+      <section className="executor-cabinet-stats" aria-label="Сводка кабинета">
+        <div className="executor-cabinet-stat"><span>Объявление</span><strong>{cabinetData.loading ? "…" : cabinetData.published ? "Опубликовано" : "Нет"}</strong></div>
+        <div className="executor-cabinet-stat"><span>Новые заявки</span><strong>{cabinetData.loading ? "…" : newRequests}</strong></div>
+        <div className="executor-cabinet-stat"><span>Активные заявки</span><strong>{cabinetData.loading ? "…" : activeRequests}</strong></div>
+      </section>
+
+      <div className="executor-cabinet-grid">
+        <CabinetCard icon="🧾" title="Мои объявления" subtitle={isCleaning ? "Виды уборки, районы и цены" : "Маршруты, цены и описание услуги"} onClick={onProfile} />
+        <CabinetCard icon="📥" title="Заявки клиентов" subtitle="Новые обращения и статусы" onClick={() => setCabinetView("requests")} badge={newRequests ? String(newRequests) : undefined} />
+        <CabinetCard icon="📅" title="Расписание" subtitle="Планируйте выезды и поездки" onClick={() => setCabinetView("schedule")} />
+        <CabinetCard icon="💬" title="Чат" subtitle="Переписка с клиентами" onClick={onChat} />
+      </div>
+
+      {cabinetView === "requests" ? (
+        <section className="panel executor-cabinet-section">
+          <div className="executor-section-heading"><div><span className="executor-cabinet-kicker">Рабочий список</span><h2>Заявки клиентов</h2></div><button className="ghost" type="button" onClick={() => setCabinetView("home")}>Назад</button></div>
+          {cabinetData.error ? <div className="error">{cabinetData.error}</div> : null}
+          {cabinetData.loading ? <div className="empty-state">Загружаем заявки...</div> : cabinetData.requests.length ? (
+            <div className="executor-request-list">
+              {cabinetData.requests.map((request) => (
+                <article className="executor-request-row" key={request.id}>
+                  <div className="executor-request-avatar">{(request.client?.display_name || "К").slice(0, 1)}</div>
+                  <div className="executor-request-copy"><strong>{request.client?.display_name || "Клиент"}</strong><span>{[request.client?.city, request.client?.search_area].filter(Boolean).join(" · ") || "Хургада"} · {requestDate(request.created_at)}</span><p>{request.comment || "Клиент пока не оставил комментарий."}</p></div>
+                  <div className="executor-request-actions"><span className={`request-status request-status-${request.status}`}>{statusLabels[request.status] || request.status}</span>{request.status === "new" ? <div><button className="primary request-action" type="button" onClick={() => updateRequest(request.id, "accepted")}>Принять</button><button className="ghost request-action" type="button" onClick={() => updateRequest(request.id, "declined")}>Отклонить</button></div> : null}{request.status === "accepted" ? <button className="secondary request-action" type="button" onClick={() => updateRequest(request.id, "completed")}>Завершить</button> : null}</div>
+                </article>
+              ))}
+            </div>
+          ) : <div className="empty-state">Новых заявок пока нет. Они появятся здесь, когда клиент выберет вашу услугу.</div>}
+        </section>
+      ) : null}
+
+      {cabinetView === "schedule" ? (
+        <section className="panel executor-cabinet-section">
+          <div className="executor-section-heading"><div><span className="executor-cabinet-kicker">Планирование</span><h2>Расписание выездов</h2></div><button className="ghost" type="button" onClick={() => setCabinetView("home")}>Назад</button></div>
+          <div className="executor-schedule-empty"><span aria-hidden="true">📅</span><strong>Расписание подключим к принятым заявкам</strong><p>После подтверждения заявки поездка или уборка будет отображаться здесь по дате и времени.</p><button className="secondary" type="button" onClick={() => setCabinetView("requests")}>Открыть заявки</button></div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
 function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading, eventsError, databaseExecutors, reloadExecutors }) {
   const [view, setView] = useState("services");
   const [service, setService] = useState("");
@@ -967,7 +1094,8 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
       <section className="content">
         {workspaceError ? <div className="panel error-state">{workspaceError}</div> : null}
         {view === "messages" ? <ChatMenu onServices={openServices} onChat={openChat} /> : null}
-        {view === "services" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
+        {view === "services" && user.role === "executor" ? <ExecutorDashboard user={user} onChat={openChat} onProfile={openProfile} databaseExecutors={databaseExecutors} /> : null}
+        {view === "services" && user.role !== "executor" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} externalConversationFallbacks={chatFallbacks} /> : null}
         {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} onBack={closeProfile} /> : null}
       </section>
