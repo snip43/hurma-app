@@ -1,7 +1,22 @@
-﻿const { useEffect, useMemo, useRef, useState } = React;
+const { useEffect, useMemo, useRef, useState } = React;
 const { withTimeout } = window.HurmaAsync;
 const { normalizeContact, buildManualContact, normalizeChatMessage, upsertChatMessage } = window.HurmaChatUtils;
 const { readAuthCallback, cleanAuthCallbackUrl, confirmationErrorMessage } = window.HurmaAuthUtils;
+const {
+  ROUTE_CITIES,
+  CUSTOM_PLACE,
+  routePlaceGroups,
+  pointLabel,
+  normalizeRouteDraft,
+  blankRoute,
+} = window.HurmaRouteData;
+const {
+  CURRENCIES,
+  normalizeCurrency,
+  formatMoney,
+  convertCurrency,
+  conversionText,
+} = window.HurmaCurrencyUtils;
 
 const STORAGE_KEY = "hurma-react-state-v1";
 const supabaseConfig = window.HURMA_SUPABASE || {};
@@ -10,8 +25,27 @@ const supabaseClient = window.supabase && supabaseConfig.url && supabaseConfig.p
   : null;
 
 const CITIES = {
-  "Хургада": ["Все", "Marina", "Sheraton", "Mamsha", "Sahl Hasheesh", "El Gouna", "Dahar", "Эль-Ахья"],
-  "Шарм-эль-Шейх": ["Все", "Naama Bay", "Hadaba", "Sharks Bay", "Nabq Bay", "Old Market", "SOHO Square"],
+  "Хургада": ["Все", "Marina", "Sheraton", "Mamsha", "Эль-Каусер", "Интерконтиненталь", "Магавиш", "Sahl Hasheesh", "El Gouna", "Dahar", "Эль-Ахья"],
+  "Шарм-эль-Шейх": ["Все", "Naama Bay", "Hadaba", "Sharks Bay", "Nabq Bay", "Old Market", "SOHO Square", "Hay El Nour", "Ras Um Sid"],
+  "Каир": ["Все", "Центр Каира", "Замалек", "Маади", "Наср-Сити", "Гелиополис", "Новый Каир"],
+  "Гиза": ["Все", "Докки", "Мохандесин", "6 Октября", "Шейх-Зайед", "Пирамиды"],
+  "Александрия": ["Все", "Центр", "Корниш", "Смуха", "Сиди-Габер", "Рушди", "Стэнли", "Монтаза", "Агами"],
+  "Луксор": ["Все", "Восточный берег", "Западный берег"],
+  "Асуан": ["Все", "Центр Асуана", "Нубийская деревня"],
+  "Марса-Алам": ["Все", "Порт-Галиб", "Центр Марса-Алама", "Абу-Даббаб"],
+  "Сафага": ["Все", "Центр Сафаги", "Сома-Бей", "Макади-Бей"],
+  "Эль-Кусейр": ["Все", "Центр Эль-Кусейра", "Курортная зона"],
+  "Эль-Гуна": ["Все", "Downtown", "Abu Tig Marina", "New Marina", "Mangroovy"],
+  "Дахаб": ["Все", "Лайтхаус", "Масбат", "Лагуна", "Blue Hole"],
+  "Нувейба": ["Все", "Центр Нувейбы", "Порт Нувейба"],
+  "Таба": ["Все", "Taba Heights", "Пограничный переход"],
+  "Суэц": ["Все", "Центр Суэца", "Айн-Сохна"],
+  "Исмаилия": ["Все", "Центр Исмаилии", "Набережная канала"],
+  "Порт-Саид": ["Все", "Центр Порт-Саида", "Порт"],
+  "Кена": ["Все", "Центр Кены", "Дендера"],
+  "Сохаг": ["Все", "Центр Сохага"],
+  "Асьют": ["Все", "Центр Асьюта"],
+  "Эль-Минья": ["Все", "Центр Эль-Миньи"],
 };
 
 const AREA_FILTERS = ["Все районы", ...CITIES["Хургада"].filter((area) => area !== "Все")];
@@ -32,6 +66,9 @@ const CHAT_REFRESH_MS = 15000;
 const CHAT_DIALOG_CACHE_PREFIX = "hurma-chat-dialogs-v1:";
 const PROFILE_AVATAR_BUCKET = "profile-avatars";
 const SERVICE_IMAGE_BUCKET = "service-images";
+const EXCHANGE_RATE_CACHE_KEY = "hurma-exchange-rates-usd-v1";
+const EXCHANGE_RATE_CACHE_MS = 24 * 60 * 60 * 1000;
+const EXCHANGE_RATE_API = "https://open.er-api.com/v6/latest/USD";
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const EXECUTOR_LANGUAGES = [
   "Русский",
@@ -325,6 +362,87 @@ function subscriptionIsActive(subscription) {
   return !subscription.ends_at || new Date(subscription.ends_at).getTime() > Date.now();
 }
 
+let exchangeRatesPromise = null;
+
+function readCachedExchangeRates() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(EXCHANGE_RATE_CACHE_KEY) || "null");
+    if (!cached?.rates?.USD || !cached?.rates?.EGP || !cached?.rates?.RUB) return null;
+    return cached;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchExchangeRates() {
+  const cached = readCachedExchangeRates();
+  if (cached && Date.now() - Number(cached.cachedAt || 0) < EXCHANGE_RATE_CACHE_MS) return cached;
+  if (exchangeRatesPromise) return exchangeRatesPromise;
+
+  exchangeRatesPromise = withTimeout(
+    fetch(EXCHANGE_RATE_API).then(async (response) => {
+      if (!response.ok) throw new Error("Не удалось загрузить курсы валют.");
+      const data = await response.json();
+      if (data.result !== "success" || !data.rates?.EGP || !data.rates?.RUB) {
+        throw new Error("Сервис курсов валют вернул неполные данные.");
+      }
+      const result = {
+        rates: { USD: 1, EGP: Number(data.rates.EGP), RUB: Number(data.rates.RUB) },
+        updatedAt: data.time_last_update_utc || "",
+        cachedAt: Date.now(),
+      };
+      localStorage.setItem(EXCHANGE_RATE_CACHE_KEY, JSON.stringify(result));
+      return result;
+    }),
+    7000,
+    "Сервис курсов валют не ответил вовремя."
+  ).catch((error) => {
+    if (cached) return { ...cached, stale: true };
+    throw error;
+  }).finally(() => {
+    exchangeRatesPromise = null;
+  });
+
+  return exchangeRatesPromise;
+}
+
+function useExchangeRates() {
+  const cached = readCachedExchangeRates();
+  const [state, setState] = useState({
+    rates: cached?.rates || null,
+    updatedAt: cached?.updatedAt || "",
+    loading: !cached,
+    error: "",
+  });
+
+  useEffect(() => {
+    let active = true;
+    fetchExchangeRates()
+      .then((result) => {
+        if (!active) return;
+        setState({
+          rates: result.rates,
+          updatedAt: result.updatedAt || "",
+          loading: false,
+          error: result.stale ? "Показан последний сохраненный курс." : "",
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+        setState((current) => ({
+          ...current,
+          loading: false,
+          error: "Автоматический пересчет временно недоступен.",
+        }));
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return state;
+}
+
 function formatEventDate(value) {
   return new Intl.DateTimeFormat("ru-RU", {
     weekday: "short",
@@ -353,6 +471,8 @@ function mapDatabaseEvent(event) {
 }
 
 function mapDatabaseExecutor(executor) {
+  const routes = Array.isArray(executor.routes) ? executor.routes : [];
+  const isTransfer = executor.category !== "cleaning";
   return {
     id: `db:${executor.user_id}`,
     databaseUserId: executor.user_id,
@@ -361,12 +481,16 @@ function mapDatabaseExecutor(executor) {
     area: executor.service_area || "",
     category: executor.category === "cleaning" ? "Клининг" : "Трансфер",
     title: executor.headline,
-    price: executor.price_from == null ? "Цена по договоренности" : `от ${Number(executor.price_from)} $`,
+    price: isTransfer && routes.length
+      ? "Цены по маршрутам"
+      : executor.price_from == null
+        ? "Цена по договоренности"
+        : `от ${formatMoney(executor.price_from, executor.currency || "USD")}`,
     rating: Number(executor.rating || 0).toFixed(1),
     about: executor.bio,
     skills: [...(executor.tags || []), ...(executor.languages || [])],
     photoUrl: executor.photo_url || "",
-    routes: Array.isArray(executor.routes) ? executor.routes : [],
+    routes,
   };
 }
 
@@ -1225,6 +1349,7 @@ function ExecutorList({ service, user, onStartChat, databaseExecutors }) {
   const [q, setQ] = useState("");
   const [filterDraft, setFilterDraft] = useState({ q: "" });
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const exchangeRateState = useExchangeRates();
   const items = [...databaseExecutors, ...EXECUTORS].filter((executor) => executor.category === service && `${executor.name} ${executor.title} ${executor.area}`.toLowerCase().includes(q.toLowerCase()));
   const openFilters = () => {
     setFilterDraft({ q });
@@ -1281,7 +1406,10 @@ function ExecutorList({ service, user, onStartChat, databaseExecutors }) {
                   {executor.routes.slice(0, 4).map((route, index) => (
                     <div className="route-row" key={`${route.from}-${route.to}-${index}`}>
                       <span>{route.from} <b aria-hidden="true">→</b> {route.to}</span>
-                      <strong>{Number(route.price)} $</strong>
+                      <strong>
+                        <span>{formatMoney(route.price, route.currency || "USD")}</span>
+                        {exchangeRateState.rates ? <small>{conversionText(route.price, route.currency || "USD", exchangeRateState.rates)}</small> : null}
+                      </strong>
                     </div>
                   ))}
                 </div>
@@ -1297,6 +1425,12 @@ function ExecutorList({ service, user, onStartChat, databaseExecutors }) {
           </article>
         ))}
       </div>
+      {service === "Трансфер" ? (
+        <p className="currency-attribution">
+          Пересчет справочный, без учета комиссии банка.{" "}
+          <a href="https://www.exchangerate-api.com" target="_blank" rel="noreferrer">Rates By Exchange Rate API</a>
+        </p>
+      ) : null}
     </>
   );
 }
@@ -2163,9 +2297,63 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   );
 }
 
+function RoutePointEditor({ label, side, route, index, onChange }) {
+  const cityKey = `${side}City`;
+  const placeKey = `${side}Place`;
+  const customKey = `${side}Custom`;
+  const city = route[cityKey] || "Хургада";
+  const place = route[placeKey] || "";
+  return (
+    <div className="route-point-field">
+      <span>{label}</span>
+      <div className="route-point-selects">
+        <select aria-label={`${label}: город`} value={city} onChange={(event) => onChange(index, cityKey, event.target.value)}>
+          {ROUTE_CITIES.map((cityName) => <option key={cityName} value={cityName}>{cityName}</option>)}
+        </select>
+        <select aria-label={`${label}: район или место`} value={place} onChange={(event) => onChange(index, placeKey, event.target.value)}>
+          <option value="">Выберите район или место</option>
+          {routePlaceGroups(city).map((group) => (
+            <optgroup label={group.group} key={group.group}>
+              {group.places.map((placeName) => <option key={placeName} value={placeName}>{placeName}</option>)}
+            </optgroup>
+          ))}
+          <option value={CUSTOM_PLACE}>{CUSTOM_PLACE}</option>
+        </select>
+      </div>
+      {place === CUSTOM_PLACE ? (
+        <input
+          className="route-custom-place"
+          aria-label={`${label}: свое место`}
+          value={route[customKey] || ""}
+          onChange={(event) => onChange(index, customKey, event.target.value)}
+          placeholder="Введите адрес или название места"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function RoutePriceEditor({ route, index, onChange, exchangeRates }) {
+  const currency = normalizeCurrency(route.currency);
+  const converted = exchangeRates ? conversionText(route.price, currency, exchangeRates) : "";
+  return (
+    <label className="route-price-field">
+      <span>Цена</span>
+      <div className="route-price-controls">
+        <input type="number" min="1" step="0.01" value={route.price} onChange={(event) => onChange(index, "price", event.target.value)} placeholder="10" />
+        <select value={currency} onChange={(event) => onChange(index, "currency", event.target.value)} aria-label="Валюта цены">
+          {CURRENCIES.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
+        </select>
+      </div>
+      <small className="route-conversion">{converted || "Пересчет появится после ввода цены"}</small>
+    </label>
+  );
+}
+
 function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
   const executorCategory = user.category === "Клининг" ? "Клининг" : "Трансфер";
   const initialServicePhoto = parseServicePhoto(user.servicePhotoUrl || "");
+  const exchangeRateState = useExchangeRates();
   const [draft, setDraft] = useState(user);
   const [locked, setLocked] = useState(false);
   const [profileError, setProfileError] = useState("");
@@ -2179,7 +2367,7 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
     languages: "Русский",
     tags: "",
     photoUrl: user.servicePhotoUrl || "",
-    routes: [{ from: "", to: "", price: "" }],
+    routes: [blankRoute(user.city)],
     isPublished: false,
   });
   const [executorLoading, setExecutorLoading] = useState(user.role === "executor");
@@ -2241,8 +2429,8 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
             tags: (data.tags || []).join(", "),
             photoUrl,
             routes: Array.isArray(data.routes) && data.routes.length
-              ? data.routes.map((route) => ({ from: route.from || "", to: route.to || "", price: String(route.price ?? "") }))
-              : [{ from: "", to: "", price: "" }],
+              ? data.routes.map((route) => normalizeRouteDraft(route, user.city))
+              : [blankRoute(user.city)],
             isPublished: data.is_published,
           });
           setServicePhotoFit(photoSettings.configured ? photoSettings.fit : (user.servicePhotoFit || photoSettings.fit));
@@ -2430,18 +2618,32 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
     setExecutorError("");
     setExecutorDraft((current) => ({
       ...current,
-      routes: current.routes.map((route, routeIndex) => routeIndex === index ? { ...route, [key]: value } : route),
+      routes: current.routes.map((route, routeIndex) => {
+        if (routeIndex !== index) return route;
+        const next = { ...route, [key]: value };
+        if (key === "fromCity") {
+          next.fromPlace = "";
+          next.fromCustom = "";
+        }
+        if (key === "toCity") {
+          next.toPlace = "";
+          next.toCustom = "";
+        }
+        if (key === "fromPlace" && value !== CUSTOM_PLACE) next.fromCustom = "";
+        if (key === "toPlace" && value !== CUSTOM_PLACE) next.toCustom = "";
+        return next;
+      }),
     }));
   }
 
   function addRoute() {
-    setExecutorDraft((current) => ({ ...current, routes: [...current.routes, { from: "", to: "", price: "" }] }));
+    setExecutorDraft((current) => ({ ...current, routes: [...current.routes, blankRoute(draft.city)] }));
   }
 
   function removeRoute(index) {
     setExecutorDraft((current) => ({
       ...current,
-      routes: current.routes.length === 1 ? [{ from: "", to: "", price: "" }] : current.routes.filter((_, routeIndex) => routeIndex !== index),
+      routes: current.routes.length === 1 ? [blankRoute(draft.city)] : current.routes.filter((_, routeIndex) => routeIndex !== index),
     }));
   }
 
@@ -2458,14 +2660,25 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
       return;
     }
     const isTransfer = executorCategory === "Трансфер";
-    const activeRoutes = executorDraft.routes.filter((route) => route.from.trim() || route.to.trim() || String(route.price).trim());
-    if (isTransfer && (!activeRoutes.length || activeRoutes.some((route) => !route.from.trim() || !route.to.trim() || Number(route.price) <= 0))) {
-      setExecutorError("Добавьте хотя бы один маршрут: откуда, куда и цена больше нуля.");
+    const activeRoutes = executorDraft.routes.filter((route) => pointLabel(route, "from") || pointLabel(route, "to") || String(route.price).trim());
+    if (isTransfer && (!activeRoutes.length || activeRoutes.some((route) => !pointLabel(route, "from") || !pointLabel(route, "to") || Number(route.price) <= 0))) {
+      setExecutorError("Добавьте хотя бы один маршрут: выберите города, места и укажите цену больше нуля.");
       return;
     }
     const splitList = (value) => value.split(",").map((item) => item.trim()).filter(Boolean);
     const routes = isTransfer
-      ? activeRoutes.map((route) => ({ from: route.from.trim(), to: route.to.trim(), price: Number(route.price) }))
+      ? activeRoutes.map((route) => ({
+          from: pointLabel(route, "from"),
+          to: pointLabel(route, "to"),
+          from_city: route.fromCity,
+          from_place: route.fromPlace,
+          from_custom: route.fromCustom || "",
+          to_city: route.toCity,
+          to_place: route.toPlace,
+          to_custom: route.toCustom || "",
+          price: Number(route.price),
+          currency: normalizeCurrency(route.currency),
+        }))
       : [];
     setPublishingExecutor(true);
     try {
@@ -2482,7 +2695,7 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
         price_from: isTransfer
           ? (routePrices.length ? Math.min(...routePrices) : null)
           : (executorDraft.priceFrom === "" ? null : Number(executorDraft.priceFrom)),
-        currency: "USD",
+        currency: routes[0]?.currency || "USD",
         languages: splitList(executorDraft.languages),
         tags: splitList(executorDraft.tags),
         photo_url: nextPhotoUrl,
@@ -2491,7 +2704,12 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
       };
       const { error } = await supabaseClient.from("executor_profiles").upsert(payload, { onConflict: "user_id" });
       if (error) throw error;
-      setExecutorDraft((current) => ({ ...current, photoUrl: nextPhotoUrl, routes: isTransfer ? routes.map((route) => ({ ...route, price: String(route.price) })) : current.routes, isPublished: true }));
+      setExecutorDraft((current) => ({
+        ...current,
+        photoUrl: nextPhotoUrl,
+        routes: isTransfer ? routes.map((route) => normalizeRouteDraft(route, draft.city)) : current.routes,
+        isPublished: true,
+      }));
       setExecutorMessage("Объявление опубликовано и появилось в списке исполнителей.");
       await reloadExecutors();
     } catch (error) {
@@ -2603,12 +2821,18 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
                   <p>Клиент увидит эти варианты прямо в карточке объявления.</p>
                   {executorDraft.routes.map((route, index) => (
                     <div className="route-edit-row" key={index}>
-                      <label><span>Откуда</span><input value={route.from} onChange={(event) => changeRoute(index, "from", event.target.value)} placeholder="Аэропорт" /></label>
-                      <label><span>Куда</span><input value={route.to} onChange={(event) => changeRoute(index, "to", event.target.value)} placeholder="Эль-Ахья" /></label>
-                      <label><span>Цена, $</span><input type="number" min="1" step="1" value={route.price} onChange={(event) => changeRoute(index, "price", event.target.value)} placeholder="10" /></label>
+                      <RoutePointEditor label="Откуда" side="from" route={route} index={index} onChange={changeRoute} />
+                      <RoutePointEditor label="Куда" side="to" route={route} index={index} onChange={changeRoute} />
+                      <RoutePriceEditor route={route} index={index} onChange={changeRoute} exchangeRates={exchangeRateState.rates} />
                       <button className="ghost route-remove" type="button" onClick={() => removeRoute(index)} aria-label="Удалить маршрут">×</button>
                     </div>
                   ))}
+                  <div className="route-currency-status">
+                    {exchangeRateState.loading ? <span>Загружаем актуальный курс валют...</span> : null}
+                    {!exchangeRateState.loading && exchangeRateState.error ? <span>{exchangeRateState.error}</span> : null}
+                    {exchangeRateState.updatedAt ? <span>Курс обновлён {new Date(exchangeRateState.updatedAt).toLocaleDateString("ru-RU")}.</span> : null}
+                    <a href="https://www.exchangerate-api.com" target="_blank" rel="noreferrer">Rates By Exchange Rate API</a>
+                  </div>
                   <button className="secondary route-add" type="button" onClick={addRoute}>Добавить маршрут</button>
                 </fieldset>
               ) : null}
@@ -2812,7 +3036,7 @@ function App() {
     if (!supabaseClient) return;
     const { data, error } = await supabaseClient
       .from("executor_profiles")
-      .select("user_id, display_name, category, headline, bio, city, service_area, price_from, languages, tags, rating, photo_url, routes")
+      .select("user_id, display_name, category, headline, bio, city, service_area, price_from, currency, languages, tags, rating, photo_url, routes")
       .eq("is_published", true)
       .order("created_at", { ascending: false });
     if (!error) setDatabaseExecutors(data.map(mapDatabaseExecutor));

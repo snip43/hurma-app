@@ -1974,8 +1974,24 @@ button {
 }
 
 .route-row strong {
+  display: grid;
+  gap: 2px;
+  justify-items: end;
   color: var(--brand-dark);
   white-space: nowrap;
+}
+
+.route-row strong small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.currency-attribution {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
 }
 
 .executor-footer {
@@ -2239,8 +2255,8 @@ button {
 
 .route-edit-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(100px, 0.35fr) 44px;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(150px, 0.55fr) 44px;
+  gap: 12px;
   align-items: end;
 }
 
@@ -2312,23 +2328,69 @@ button {
   background: rgba(8, 122, 119, 0.2);
 }
 
-.route-edit-row label {
+.route-point-field,
+.route-price-field {
   display: grid;
-  gap: 5px;
+  min-width: 0;
+  gap: 6px;
 }
 
-.route-edit-row label span {
+.route-point-field > span,
+.route-price-field > span {
   color: #4c5652;
   font-size: 12px;
   font-weight: 800;
 }
 
-.route-edit-row input {
+.route-point-selects,
+.route-price-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.route-price-controls {
+  grid-template-columns: minmax(90px, 1fr) minmax(104px, 0.78fr);
+}
+
+.route-edit-row input,
+.route-edit-row select {
   width: 100%;
+  min-width: 0;
   min-height: 46px;
   padding: 10px 12px;
   border: 1px solid #d8d2c4;
   border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  font: inherit;
+}
+
+.route-custom-place {
+  margin-top: 2px;
+}
+
+.route-conversion {
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.route-currency-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.route-currency-status a,
+.currency-attribution a {
+  color: var(--brand-dark);
+  font-weight: 800;
 }
 
 .route-remove {
@@ -3344,10 +3406,17 @@ button {
 
   .route-edit-row {
     grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: start;
   }
 
-  .route-edit-row label {
+  .route-point-field,
+  .route-price-field {
     grid-column: 1;
+  }
+
+  .route-point-selects,
+  .route-price-controls {
+    grid-template-columns: 1fr;
   }
 
   .route-remove {
