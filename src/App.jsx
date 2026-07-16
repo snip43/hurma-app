@@ -33,6 +33,28 @@ const CHAT_DIALOG_CACHE_PREFIX = "hurma-chat-dialogs-v1:";
 const PROFILE_AVATAR_BUCKET = "profile-avatars";
 const SERVICE_IMAGE_BUCKET = "service-images";
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const EXECUTOR_FEATURES = {
+  Трансфер: [
+    "Встреча в аэропорту",
+    "Детское кресло",
+    "Минивэн",
+    "Большой багажник",
+    "Кондиционер",
+    "Русскоязычный водитель",
+    "Междугородние поездки",
+    "Круглосуточно",
+  ],
+  Клининг: [
+    "Генеральная уборка",
+    "Поддерживающая уборка",
+    "Уборка после гостей",
+    "Уборка после ремонта",
+    "Мытьё окон",
+    "Свои средства",
+    "Срочный выезд",
+    "Уборка апартаментов",
+  ],
+};
 
 const EXECUTORS = [
   {
@@ -877,7 +899,7 @@ function ChatMenu({ onServices, onChat }) {
   );
 }
 
-function ExecutorDashboard({ user, onChat, onProfile, databaseExecutors }) {
+function ExecutorDashboard({ user, onChat, onAnnouncement, databaseExecutors }) {
   const [cabinetView, setCabinetView] = useState("home");
   const [cabinetData, setCabinetData] = useState({ published: false, headline: "", requests: [], loading: true, error: "" });
   const isCleaning = user.category === "Клининг";
@@ -959,7 +981,7 @@ function ExecutorDashboard({ user, onChat, onProfile, databaseExecutors }) {
         <div className={`executor-publication-card ${cabinetData.published ? "is-published" : ""}`}>
           <span>{cabinetData.published ? "Ваше объявление опубликовано" : "Объявление еще не опубликовано"}</span>
           <strong>{cabinetData.published ? (cabinetData.headline || serviceName) : "Добавьте услугу, чтобы вас нашли клиенты"}</strong>
-          <button className="secondary" type="button" onClick={onProfile}>{cabinetData.published ? "Редактировать" : "Создать объявление"}</button>
+          <button className="secondary" type="button" onClick={onAnnouncement}>{cabinetData.published ? "Редактировать" : "Создать объявление"}</button>
         </div>
       </section>
 
@@ -970,7 +992,7 @@ function ExecutorDashboard({ user, onChat, onProfile, databaseExecutors }) {
       </section>
 
       <div className="executor-cabinet-grid">
-        <CabinetCard icon="🧾" title="Мои объявления" subtitle={isCleaning ? "Виды уборки, районы и цены" : "Маршруты, цены и описание услуги"} onClick={onProfile} />
+        <CabinetCard icon="🧾" title="Мои объявления" subtitle={isCleaning ? "Виды уборки, районы и цены" : "Маршруты, цены и описание услуги"} onClick={onAnnouncement} />
         <CabinetCard icon="📥" title="Заявки клиентов" subtitle="Новые обращения и статусы" onClick={() => setCabinetView("requests")} badge={newRequests ? String(newRequests) : undefined} />
         <CabinetCard icon="📅" title="Расписание" subtitle="Планируйте выезды и поездки" onClick={() => setCabinetView("schedule")} />
         <CabinetCard icon="💬" title="Чат" subtitle="Переписка с клиентами" onClick={onChat} />
@@ -1012,6 +1034,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
   const [chatId, setChatId] = useState("");
   const [chatFallbacks, setChatFallbacks] = useState({});
   const [profileReturnView, setProfileReturnView] = useState("services");
+  const [profileMode, setProfileMode] = useState("profile");
   const [workspaceError, setWorkspaceError] = useState("");
 
   function goHome() {
@@ -1033,6 +1056,14 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
 
   function openProfile() {
     if (user.isGuest) return;
+    setProfileMode("profile");
+    setProfileReturnView(view === "profile" ? "services" : view);
+    setView("profile");
+  }
+
+  function openAnnouncement() {
+    if (user.isGuest || user.role !== "executor") return;
+    setProfileMode("announcement");
     setProfileReturnView(view === "profile" ? "services" : view);
     setView("profile");
   }
@@ -1094,10 +1125,10 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
       <section className="content">
         {workspaceError ? <div className="panel error-state">{workspaceError}</div> : null}
         {view === "messages" ? <ChatMenu onServices={openServices} onChat={openChat} /> : null}
-        {view === "services" && user.role === "executor" ? <ExecutorDashboard user={user} onChat={openChat} onProfile={openProfile} databaseExecutors={databaseExecutors} /> : null}
+        {view === "services" && user.role === "executor" ? <ExecutorDashboard user={user} onChat={openChat} onAnnouncement={openAnnouncement} databaseExecutors={databaseExecutors} /> : null}
         {view === "services" && user.role !== "executor" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} externalConversationFallbacks={chatFallbacks} /> : null}
-        {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} onBack={closeProfile} /> : null}
+        {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} onBack={closeProfile} mode={profileMode} /> : null}
       </section>
     </section>
   );
@@ -2089,7 +2120,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
   );
 }
 
-function Profile({ user, setUser, reloadExecutors, onBack }) {
+function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
   const [draft, setDraft] = useState(user);
   const [locked, setLocked] = useState(false);
   const [profileError, setProfileError] = useState("");
@@ -2112,9 +2143,16 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
   const [executorError, setExecutorError] = useState("");
   const [publishingExecutor, setPublishingExecutor] = useState(false);
   const [servicePhotoFile, setServicePhotoFile] = useState(null);
+  const [featureChoice, setFeatureChoice] = useState("");
+  const [customFeature, setCustomFeature] = useState("");
   const areas = areaOptions(draft.city);
   const avatarPreview = useMemo(() => avatarFile ? URL.createObjectURL(avatarFile) : (draft.avatarUrl || ""), [avatarFile, draft.avatarUrl]);
   const servicePhotoPreview = useMemo(() => servicePhotoFile ? URL.createObjectURL(servicePhotoFile) : executorDraft.photoUrl, [servicePhotoFile, executorDraft.photoUrl]);
+  const selectedFeatures = useMemo(
+    () => executorDraft.tags.split(",").map((item) => item.trim()).filter(Boolean),
+    [executorDraft.tags]
+  );
+  const availableFeatures = EXECUTOR_FEATURES[executorDraft.category] || [];
 
   useEffect(() => () => {
     if (avatarPreview.startsWith("blob:")) URL.revokeObjectURL(avatarPreview);
@@ -2215,7 +2253,36 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
   function changeExecutor(key, value) {
     setExecutorMessage("");
     setExecutorError("");
-    setExecutorDraft((current) => ({ ...current, [key]: value }));
+    setExecutorDraft((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "category" && current.category !== value ? { tags: "" } : {}),
+    }));
+    if (key === "category") {
+      setFeatureChoice("");
+      setCustomFeature("");
+    }
+  }
+
+  function addFeature(value) {
+    const normalized = value.trim();
+    if (!normalized) return;
+    const nextFeatures = selectedFeatures.some((item) => item.toLowerCase() === normalized.toLowerCase())
+      ? selectedFeatures
+      : [...selectedFeatures, normalized];
+    changeExecutor("tags", nextFeatures.join(", "));
+    setFeatureChoice("");
+    setCustomFeature("");
+  }
+
+  function chooseFeature(event) {
+    const value = event.target.value;
+    setFeatureChoice(value);
+    if (value && value !== "Другое") addFeature(value);
+  }
+
+  function removeFeature(value) {
+    changeExecutor("tags", selectedFeatures.filter((item) => item !== value).join(", "));
   }
 
   function chooseServicePhoto(event) {
@@ -2313,7 +2380,7 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
 
   return (
     <div className="profile-stack">
-      <div className="panel profile-panel">
+      {mode === "profile" ? <div className="panel profile-panel">
         <h2 className="section-title">{user.role === "executor" ? "Профиль исполнителя" : "Профиль клиента"}</h2>
         <p className="section-note">Эти данные можно изменить при необходимости.</p>
         <form className="form" onSubmit={save}>
@@ -2337,9 +2404,9 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
           <button className="primary" type="submit" disabled={locked || savingProfile}>{savingProfile ? "Сохраняем..." : "Сохранить профиль"}</button>
           <button className="ghost profile-back-button" type="button" onClick={onBack}>Назад</button>
         </form>
-      </div>
+      </div> : null}
 
-      {user.role === "executor" ? (
+      {user.role === "executor" && mode === "announcement" ? (
         <div className="panel profile-panel executor-publish-panel">
           <div className="publish-heading">
             <div>
@@ -2385,12 +2452,46 @@ function Profile({ user, setUser, reloadExecutors, onBack }) {
                 {executorDraft.category === "Клининг" ? <label className="field"><span>Цена от, $</span><input type="number" min="0" step="1" value={executorDraft.priceFrom} onChange={(event) => changeExecutor("priceFrom", event.target.value)} placeholder="20" /></label> : null}
                 <label className="field"><span>Языки через запятую</span><input value={executorDraft.languages} onChange={(event) => changeExecutor("languages", event.target.value)} placeholder="Русский, Английский, Арабский" /></label>
               </div>
-              <label className="field"><span>Особенности через запятую</span><input value={executorDraft.tags} onChange={(event) => changeExecutor("tags", event.target.value)} placeholder="Аэропорт, детское кресло, минивэн" /></label>
+              <div className="field executor-features-field">
+                <span>Особенности</span>
+                <select value={featureChoice} onChange={chooseFeature}>
+                  <option value="">Выберите особенность</option>
+                  {availableFeatures.filter((feature) => !selectedFeatures.includes(feature)).map((feature) => <option key={feature} value={feature}>{feature}</option>)}
+                  <option value="Другое">Другое</option>
+                </select>
+                {featureChoice === "Другое" ? (
+                  <div className="custom-feature-row">
+                    <input
+                      value={customFeature}
+                      onChange={(event) => setCustomFeature(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          addFeature(customFeature);
+                        }
+                      }}
+                      placeholder="Напишите свой вариант"
+                    />
+                    <button className="secondary" type="button" onClick={() => addFeature(customFeature)} disabled={!customFeature.trim()}>Добавить</button>
+                  </div>
+                ) : null}
+                {selectedFeatures.length ? (
+                  <div className="selected-features" aria-label="Выбранные особенности">
+                    {selectedFeatures.map((feature) => (
+                      <span className="selected-feature" key={feature}>
+                        {feature}
+                        <button type="button" onClick={() => removeFeature(feature)} aria-label={`Удалить ${feature}`}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                ) : <small>Можно выбрать несколько пунктов по очереди.</small>}
+              </div>
               {executorError ? <div className="error">{executorError}</div> : null}
               {executorMessage ? <div className="form-info">{executorMessage}</div> : null}
               <button className="primary publish-button" type="submit" disabled={publishingExecutor}>
                 {publishingExecutor ? "Публикуем..." : executorDraft.isPublished ? "Обновить объявление" : "Разместить объявление"}
               </button>
+              <button className="ghost profile-back-button" type="button" onClick={onBack}>Назад</button>
             </form>
           )}
         </div>

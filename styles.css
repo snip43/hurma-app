@@ -2159,6 +2159,65 @@ button {
   align-items: end;
 }
 
+.executor-features-field {
+  display: grid;
+  gap: 10px;
+}
+
+.executor-features-field > small {
+  color: var(--muted);
+}
+
+.custom-feature-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.custom-feature-row .secondary {
+  min-width: 130px;
+}
+
+.selected-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.selected-feature {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid rgba(8, 122, 119, 0.2);
+  border-radius: 999px;
+  color: var(--brand-dark);
+  background: #edf5f1;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.selected-feature button {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: var(--brand-dark);
+  background: rgba(8, 122, 119, 0.1);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.selected-feature button:hover,
+.selected-feature button:focus-visible {
+  background: rgba(8, 122, 119, 0.2);
+}
+
 .route-edit-row label {
   display: grid;
   gap: 5px;
@@ -3269,6 +3328,14 @@ button {
 
   .executor-cabinet-card {
     min-height: 82px;
+  }
+
+  .custom-feature-row {
+    grid-template-columns: 1fr;
+  }
+
+  .custom-feature-row .secondary {
+    width: 100%;
   }
 
   .executor-section-heading,
