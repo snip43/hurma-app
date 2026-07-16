@@ -2168,13 +2168,13 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
 }
 
 function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
+  const executorCategory = user.category === "Клининг" ? "Клининг" : "Трансфер";
   const [draft, setDraft] = useState(user);
   const [locked, setLocked] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
   const [executorDraft, setExecutorDraft] = useState({
-    category: user.category || "Трансфер",
     headline: "",
     bio: "",
     serviceArea: user.searchArea || "Marina",
@@ -2199,7 +2199,7 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
     () => executorDraft.tags.split(",").map((item) => item.trim()).filter(Boolean),
     [executorDraft.tags]
   );
-  const availableFeatures = EXECUTOR_FEATURES[executorDraft.category] || [];
+  const availableFeatures = EXECUTOR_FEATURES[executorCategory] || [];
 
   useEffect(() => () => {
     if (avatarPreview.startsWith("blob:")) URL.revokeObjectURL(avatarPreview);
@@ -2223,7 +2223,6 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
           setExecutorError(error.message);
         } else if (data) {
           setExecutorDraft({
-            category: data.category === "cleaning" ? "Клининг" : "Трансфер",
             headline: data.headline,
             bio: data.bio,
             serviceArea: data.service_area || user.searchArea || "Marina",
@@ -2300,15 +2299,7 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
   function changeExecutor(key, value) {
     setExecutorMessage("");
     setExecutorError("");
-    setExecutorDraft((current) => ({
-      ...current,
-      [key]: value,
-      ...(key === "category" && current.category !== value ? { tags: "" } : {}),
-    }));
-    if (key === "category") {
-      setFeatureChoice("");
-      setCustomFeature("");
-    }
+    setExecutorDraft((current) => ({ ...current, [key]: value }));
   }
 
   function addFeature(value) {
@@ -2374,7 +2365,7 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
       setExecutorError("Добавьте фотографию объявления. Без неё публикация недоступна.");
       return;
     }
-    const isTransfer = executorDraft.category === "Трансфер";
+    const isTransfer = executorCategory === "Трансфер";
     const activeRoutes = executorDraft.routes.filter((route) => route.from.trim() || route.to.trim() || String(route.price).trim());
     if (isTransfer && (!activeRoutes.length || activeRoutes.some((route) => !route.from.trim() || !route.to.trim() || Number(route.price) <= 0))) {
       setExecutorError("Добавьте хотя бы один маршрут: откуда, куда и цена больше нуля.");
@@ -2393,7 +2384,7 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
       const payload = {
         user_id: user.id,
         display_name: draft.name.trim(),
-        category: executorDraft.category === "Клининг" ? "cleaning" : "transfer",
+        category: executorCategory === "Клининг" ? "cleaning" : "transfer",
         headline: executorDraft.headline.trim(),
         bio: executorDraft.bio.trim(),
         city: draft.city,
@@ -2467,7 +2458,7 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
           {executorLoading ? <div className="form-info">Загружаем объявление...</div> : (
             <form className="form" onSubmit={publishExecutor}>
               <div className="service-photo-editor">
-                <span className="service-photo-label">{executorDraft.category === "Трансфер" ? "Фото автомобиля" : "Фото услуги"}</span>
+                <span className="service-photo-label">{executorCategory === "Трансфер" ? "Фото автомобиля" : "Фото услуги"}</span>
                 <div className="service-photo-preview">
                   {servicePhotoPreview ? <img src={servicePhotoPreview} alt="Фотография объявления" /> : <span>Добавьте фотографию автомобиля или своей услуги</span>}
                 </div>
@@ -2477,11 +2468,10 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
                 </label>
                 <small>Обязательное поле · JPG, PNG или WebP · до 8 МБ</small>
               </div>
-              <label className="field"><span>Сервис</span><select value={executorDraft.category} onChange={(event) => changeExecutor("category", event.target.value)}><option>Трансфер</option><option>Клининг</option></select></label>
-              {executorDraft.category === "Клининг" ? <label className="field"><span>Район работы</span><select value={executorDraft.serviceArea} onChange={(event) => changeExecutor("serviceArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label> : null}
+              {executorCategory === "Клининг" ? <label className="field"><span>Район работы</span><select value={executorDraft.serviceArea} onChange={(event) => changeExecutor("serviceArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label> : null}
               <label className="field"><span>Заголовок объявления</span><input value={executorDraft.headline} onChange={(event) => changeExecutor("headline", event.target.value)} placeholder="Например, трансфер из аэропорта и поездки по городу" /></label>
               <label className="field"><span>Описание услуг</span><textarea value={executorDraft.bio} onChange={(event) => changeExecutor("bio", event.target.value)} placeholder="Расскажите об автомобиле, маршрутах и условиях работы" /></label>
-              {executorDraft.category === "Трансфер" ? (
+              {executorCategory === "Трансфер" ? (
                 <fieldset className="route-editor">
                   <legend>Популярные маршруты и цены</legend>
                   <p>Клиент увидит эти варианты прямо в карточке объявления.</p>
@@ -2497,7 +2487,7 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
                 </fieldset>
               ) : null}
               <div className="two-col">
-                {executorDraft.category === "Клининг" ? <label className="field"><span>Цена от, $</span><input type="number" min="0" step="1" value={executorDraft.priceFrom} onChange={(event) => changeExecutor("priceFrom", event.target.value)} placeholder="20" /></label> : null}
+                {executorCategory === "Клининг" ? <label className="field"><span>Цена от, $</span><input type="number" min="0" step="1" value={executorDraft.priceFrom} onChange={(event) => changeExecutor("priceFrom", event.target.value)} placeholder="20" /></label> : null}
                 <label className="field"><span>Языки через запятую</span><input value={executorDraft.languages} onChange={(event) => changeExecutor("languages", event.target.value)} placeholder="Русский, Английский, Арабский" /></label>
               </div>
               <div className="field executor-features-field">
