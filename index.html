@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preload" href="assets/hurghada-hero.png" as="image" fetchpriority="high" />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260716-language-feature-selects" />
+    <link rel="stylesheet" href="styles.css?v=20260716-profile-service-photo" />
   </head>
   <body>
     <div id="app">
@@ -308,11 +308,42 @@ function imageFileError(file, maxMegabytes) {
   return "";
 }
 
+function parseServicePhoto(url) {
+  const [src = "", fragment = ""] = String(url || "").split("#", 2);
+  const params = new URLSearchParams(fragment);
+  const fit = params.get("fit") === "contain" ? "contain" : "cover";
+  const requestedPosition = params.get("position");
+  const position = ["top", "center", "bottom"].includes(requestedPosition) ? requestedPosition : "center";
+  return {
+    src,
+    fit,
+    position,
+    configured: params.has("fit") || params.has("position"),
+  };
+}
+
+function buildServicePhotoUrl(url, fit, position) {
+  const src = parseServicePhoto(url).src;
+  if (!src) return "";
+  const safeFit = fit === "contain" ? "contain" : "cover";
+  const safePosition = ["top", "center", "bottom"].includes(position) ? position : "center";
+  return `${src}#fit=${safeFit}&position=${safePosition}`;
+}
+
+function servicePhotoStyle(url) {
+  const photo = parseServicePhoto(url);
+  return {
+    objectFit: photo.fit,
+    objectPosition: photo.fit === "contain" ? "center center" : `center ${photo.position}`,
+  };
+}
+
 function publicStoragePath(url, bucket) {
   if (!url) return "";
   const marker = `/storage/v1/object/public/${bucket}/`;
-  const index = url.indexOf(marker);
-  return index === -1 ? "" : decodeURIComponent(url.slice(index + marker.length));
+  const cleanUrl = parseServicePhoto(url).src;
+  const index = cleanUrl.indexOf(marker);
+  return index === -1 ? "" : decodeURIComponent(cleanUrl.slice(index + marker.length));
 }
 
 async function uploadPublicImage(bucket, userId, file, prefix) {
@@ -410,6 +441,11 @@ async function loadSupabaseUser(authUser) {
     searchArea: profile.search_area || "Marina",
     avatarUrl: profile.avatar_url || "",
     category: authUser.user_metadata?.category || "Трансфер",
+    servicePhotoUrl: authUser.user_metadata?.service_photo_url || "",
+    servicePhotoFit: authUser.user_metadata?.service_photo_fit === "contain" ? "contain" : "cover",
+    servicePhotoPosition: ["top", "center", "bottom"].includes(authUser.user_metadata?.service_photo_position)
+      ? authUser.user_metadata.service_photo_position
+      : "center",
     subscription,
     subscriptionActive: subscriptionIsActive(subscription),
   };
@@ -1277,7 +1313,7 @@ function ExecutorList({ service, user, onStartChat, databaseExecutors }) {
         {items.map((executor) => (
           <article className="executor-card" key={executor.id}>
             <div className="executor-photo-wrap">
-              {executor.photoUrl ? <img className="executor-photo" src={executor.photoUrl} alt={`Объявление ${executor.name}`} /> : <div className="executor-photo-placeholder">{executor.name.slice(0, 1)}</div>}
+              {executor.photoUrl ? <img className="executor-photo" src={parseServicePhoto(executor.photoUrl).src} style={servicePhotoStyle(executor.photoUrl)} alt={`Объявление ${executor.name}`} /> : <div className="executor-photo-placeholder">{executor.name.slice(0, 1)}</div>}
               <span className="executor-rating">★ {executor.rating}</span>
             </div>
             <div className="executor-card-body">
@@ -2178,6 +2214,7 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
 
 function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
   const executorCategory = user.category === "Клининг" ? "Клининг" : "Трансфер";
+  const initialServicePhoto = parseServicePhoto(user.servicePhotoUrl || "");
   const [draft, setDraft] = useState(user);
   const [locked, setLocked] = useState(false);
   const [profileError, setProfileError] = useState("");
@@ -2190,7 +2227,7 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
     priceFrom: "",
     languages: "Русский",
     tags: "",
-    photoUrl: "",
+    photoUrl: user.servicePhotoUrl || "",
     routes: [{ from: "", to: "", price: "" }],
     isPublished: false,
   });
@@ -2199,13 +2236,18 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
   const [executorError, setExecutorError] = useState("");
   const [publishingExecutor, setPublishingExecutor] = useState(false);
   const [servicePhotoFile, setServicePhotoFile] = useState(null);
+  const [servicePhotoFit, setServicePhotoFit] = useState(user.servicePhotoFit || initialServicePhoto.fit);
+  const [servicePhotoPosition, setServicePhotoPosition] = useState(user.servicePhotoPosition || initialServicePhoto.position);
   const [languageChoice, setLanguageChoice] = useState("");
   const [customLanguage, setCustomLanguage] = useState("");
   const [featureChoice, setFeatureChoice] = useState("");
   const [customFeature, setCustomFeature] = useState("");
   const areas = areaOptions(draft.city);
   const avatarPreview = useMemo(() => avatarFile ? URL.createObjectURL(avatarFile) : (draft.avatarUrl || ""), [avatarFile, draft.avatarUrl]);
-  const servicePhotoPreview = useMemo(() => servicePhotoFile ? URL.createObjectURL(servicePhotoFile) : executorDraft.photoUrl, [servicePhotoFile, executorDraft.photoUrl]);
+  const servicePhotoPreview = useMemo(
+    () => servicePhotoFile ? URL.createObjectURL(servicePhotoFile) : parseServicePhoto(executorDraft.photoUrl || draft.servicePhotoUrl).src,
+    [servicePhotoFile, executorDraft.photoUrl, draft.servicePhotoUrl]
+  );
   const selectedLanguages = useMemo(
     () => executorDraft.languages.split(",").map((item) => item.trim()).filter(Boolean),
     [executorDraft.languages]
@@ -2237,6 +2279,8 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
         if (error) {
           setExecutorError(error.message);
         } else if (data) {
+          const photoUrl = data.photo_url || user.servicePhotoUrl || "";
+          const photoSettings = parseServicePhoto(photoUrl);
           setExecutorDraft({
             headline: data.headline,
             bio: data.bio,
@@ -2244,19 +2288,26 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
             priceFrom: data.price_from == null ? "" : String(data.price_from),
             languages: (data.languages || []).join(", "),
             tags: (data.tags || []).join(", "),
-            photoUrl: data.photo_url || "",
+            photoUrl,
             routes: Array.isArray(data.routes) && data.routes.length
               ? data.routes.map((route) => ({ from: route.from || "", to: route.to || "", price: String(route.price ?? "") }))
               : [{ from: "", to: "", price: "" }],
             isPublished: data.is_published,
           });
+          setServicePhotoFit(photoSettings.configured ? photoSettings.fit : (user.servicePhotoFit || photoSettings.fit));
+          setServicePhotoPosition(photoSettings.configured ? photoSettings.position : (user.servicePhotoPosition || photoSettings.position));
+        } else {
+          const photoSettings = parseServicePhoto(user.servicePhotoUrl || "");
+          setExecutorDraft((current) => ({ ...current, photoUrl: user.servicePhotoUrl || current.photoUrl }));
+          setServicePhotoFit(user.servicePhotoFit || photoSettings.fit);
+          setServicePhotoPosition(user.servicePhotoPosition || photoSettings.position);
         }
         setExecutorLoading(false);
       });
     return () => {
       active = false;
     };
-  }, [user.id, user.role]);
+  }, [user.id, user.role, user.servicePhotoFit, user.servicePhotoPosition, user.servicePhotoUrl]);
 
   function change(key, value) {
     setLocked(false);
@@ -2284,10 +2335,18 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
     event.preventDefault();
     setProfileError("");
     setSavingProfile(true);
-    let uploaded = null;
+    let avatarUploaded = null;
+    let servicePhotoUploaded = null;
     try {
-      if (avatarFile) uploaded = await uploadPublicImage(PROFILE_AVATAR_BUCKET, user.id, avatarFile, "avatar");
-      const nextAvatarUrl = uploaded?.url || draft.avatarUrl || "";
+      if (avatarFile) avatarUploaded = await uploadPublicImage(PROFILE_AVATAR_BUCKET, user.id, avatarFile, "avatar");
+      if (user.role === "executor" && servicePhotoFile) {
+        servicePhotoUploaded = await uploadPublicImage(SERVICE_IMAGE_BUCKET, user.id, servicePhotoFile, "service");
+      }
+      const nextAvatarUrl = avatarUploaded?.url || draft.avatarUrl || "";
+      const currentServicePhotoUrl = executorDraft.photoUrl || draft.servicePhotoUrl || "";
+      const nextServicePhotoUrl = user.role === "executor"
+        ? buildServicePhotoUrl(servicePhotoUploaded?.url || currentServicePhotoUrl, servicePhotoFit, servicePhotoPosition)
+        : "";
       const { error } = await supabaseClient.from("profiles").update({
         display_name: draft.name,
         city: draft.city,
@@ -2295,16 +2354,46 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
         avatar_url: nextAvatarUrl || null,
       }).eq("id", user.id);
       if (error) throw error;
-      if (uploaded && draft.avatarUrl && draft.avatarUrl !== nextAvatarUrl) {
+      if (user.role === "executor") {
+        const { error: authError } = await supabaseClient.auth.updateUser({
+          data: {
+            service_photo_url: nextServicePhotoUrl,
+            service_photo_fit: servicePhotoFit,
+            service_photo_position: servicePhotoPosition,
+          },
+        });
+        if (authError) throw authError;
+        if (nextServicePhotoUrl) {
+          const { error: executorProfileError } = await supabaseClient
+            .from("executor_profiles")
+            .update({ photo_url: nextServicePhotoUrl })
+            .eq("user_id", user.id);
+          if (executorProfileError) throw executorProfileError;
+        }
+      }
+      if (avatarUploaded && draft.avatarUrl && draft.avatarUrl !== nextAvatarUrl) {
         await removePublicImage(PROFILE_AVATAR_BUCKET, draft.avatarUrl);
       }
-      const nextUser = { ...draft, avatarUrl: nextAvatarUrl };
+      if (servicePhotoUploaded && currentServicePhotoUrl && parseServicePhoto(currentServicePhotoUrl).src !== parseServicePhoto(nextServicePhotoUrl).src) {
+        await removePublicImage(SERVICE_IMAGE_BUCKET, currentServicePhotoUrl);
+      }
+      const nextUser = {
+        ...draft,
+        avatarUrl: nextAvatarUrl,
+        servicePhotoUrl: nextServicePhotoUrl,
+        servicePhotoFit,
+        servicePhotoPosition,
+      };
       setDraft(nextUser);
       setUser(nextUser);
       setAvatarFile(null);
+      setServicePhotoFile(null);
+      setExecutorDraft((current) => ({ ...current, photoUrl: nextServicePhotoUrl }));
       setLocked(true);
+      if (user.role === "executor") await reloadExecutors();
     } catch (error) {
-      if (uploaded?.url) await removePublicImage(PROFILE_AVATAR_BUCKET, uploaded.url);
+      if (avatarUploaded?.url) await removePublicImage(PROFILE_AVATAR_BUCKET, avatarUploaded.url);
+      if (servicePhotoUploaded?.url) await removePublicImage(SERVICE_IMAGE_BUCKET, servicePhotoUploaded.url);
       setProfileError(toUserError(error));
     } finally {
       setSavingProfile(false);
@@ -2362,12 +2451,28 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
   function chooseServicePhoto(event) {
     const file = event.target.files?.[0];
     const error = imageFileError(file, 8);
-    setExecutorError(error);
+    setProfileError(error);
     if (error) {
       event.target.value = "";
       return;
     }
     setServicePhotoFile(file);
+    setServicePhotoFit("contain");
+    setServicePhotoPosition("center");
+    setLocked(false);
+    event.target.value = "";
+  }
+
+  function changeServicePhotoFit(value) {
+    setServicePhotoFit(value);
+    setLocked(false);
+    setProfileError("");
+  }
+
+  function changeServicePhotoPosition(value) {
+    setServicePhotoPosition(value);
+    setLocked(false);
+    setProfileError("");
   }
 
   function changeRoute(index, key, value) {
@@ -2397,8 +2502,8 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
       setExecutorError("Заполните заголовок и описание объявления.");
       return;
     }
-    if (!executorDraft.photoUrl && !servicePhotoFile) {
-      setExecutorError("Добавьте фотографию объявления. Без неё публикация недоступна.");
+    if (!executorDraft.photoUrl) {
+      setExecutorError("Добавьте фотографию автомобиля или услуги в настройках профиля. Без неё публикация недоступна.");
       return;
     }
     const isTransfer = executorCategory === "Трансфер";
@@ -2411,11 +2516,9 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
     const routes = isTransfer
       ? activeRoutes.map((route) => ({ from: route.from.trim(), to: route.to.trim(), price: Number(route.price) }))
       : [];
-    let uploaded = null;
     setPublishingExecutor(true);
     try {
-      if (servicePhotoFile) uploaded = await uploadPublicImage(SERVICE_IMAGE_BUCKET, user.id, servicePhotoFile, "service");
-      const nextPhotoUrl = uploaded?.url || executorDraft.photoUrl;
+      const nextPhotoUrl = executorDraft.photoUrl;
       const routePrices = routes.map((route) => route.price);
       const payload = {
         user_id: user.id,
@@ -2437,15 +2540,10 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
       };
       const { error } = await supabaseClient.from("executor_profiles").upsert(payload, { onConflict: "user_id" });
       if (error) throw error;
-      if (uploaded && executorDraft.photoUrl && executorDraft.photoUrl !== nextPhotoUrl) {
-        await removePublicImage(SERVICE_IMAGE_BUCKET, executorDraft.photoUrl);
-      }
       setExecutorDraft((current) => ({ ...current, photoUrl: nextPhotoUrl, routes: isTransfer ? routes.map((route) => ({ ...route, price: String(route.price) })) : current.routes, isPublished: true }));
-      setServicePhotoFile(null);
       setExecutorMessage("Объявление опубликовано и появилось в списке исполнителей.");
       await reloadExecutors();
     } catch (error) {
-      if (uploaded?.url) await removePublicImage(SERVICE_IMAGE_BUCKET, uploaded.url);
       setExecutorError(toUserError(error));
     } finally {
       setPublishingExecutor(false);
@@ -2468,6 +2566,58 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
             </label>
             <p>Фотография будет видна собеседникам в чатах.</p>
           </div>
+          {user.role === "executor" ? (
+            <div className="service-photo-editor profile-service-photo-editor">
+              <div className="service-photo-heading">
+                <span className="service-photo-label">{executorCategory === "Трансфер" ? "Фото автомобиля" : "Фото услуги"}</span>
+                <small>Эта фотография будет показана клиентам в карточке объявления.</small>
+              </div>
+              <div className={`service-photo-preview ${servicePhotoFit === "contain" ? "contain-mode" : ""}`}>
+                {servicePhotoPreview ? (
+                  <img
+                    src={servicePhotoPreview}
+                    style={{
+                      objectFit: servicePhotoFit,
+                      objectPosition: servicePhotoFit === "contain" ? "center center" : `center ${servicePhotoPosition}`,
+                    }}
+                    alt={executorCategory === "Трансфер" ? "Фото автомобиля" : "Фото услуги"}
+                  />
+                ) : (
+                  <span>{executorCategory === "Трансфер" ? "Добавьте фотографию автомобиля" : "Добавьте фотографию своей услуги"}</span>
+                )}
+              </div>
+              <label className="secondary media-picker">
+                <span>{servicePhotoPreview ? "Заменить фотографию" : "Выбрать фотографию"}</span>
+                <input type="file" accept={IMAGE_TYPES.join(",")} onChange={chooseServicePhoto} />
+              </label>
+              {servicePhotoPreview ? (
+                <div className="service-photo-display-settings">
+                  <span>Как показать фотографию</span>
+                  <div className="service-photo-fit-buttons" role="group" aria-label="Режим отображения фотографии">
+                    <button className={servicePhotoFit === "contain" ? "active" : ""} type="button" onClick={() => changeServicePhotoFit("contain")}>
+                      Показать целиком
+                    </button>
+                    <button className={servicePhotoFit === "cover" ? "active" : ""} type="button" onClick={() => changeServicePhotoFit("cover")}>
+                      Заполнить кадр
+                    </button>
+                  </div>
+                  {servicePhotoFit === "cover" ? (
+                    <label className="service-photo-position">
+                      <span>Какой фрагмент оставить в кадре</span>
+                      <select value={servicePhotoPosition} onChange={(event) => changeServicePhotoPosition(event.target.value)}>
+                        <option value="top">Верх фотографии</option>
+                        <option value="center">Центр фотографии</option>
+                        <option value="bottom">Низ фотографии</option>
+                      </select>
+                    </label>
+                  ) : (
+                    <small>Вся фотография поместится в окно без обрезки.</small>
+                  )}
+                </div>
+              ) : null}
+              <small>JPG, PNG или WebP · до 8 МБ</small>
+            </div>
+          ) : null}
           <div className="two-col">
             <label className="field"><span>Имя и фамилия</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
             <label className="field"><span>Город</span><select value={draft.city} onChange={(event) => change("city", event.target.value)}>{Object.keys(CITIES).map((city) => <option key={city}>{city}</option>)}</select></label>
@@ -2493,17 +2643,6 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
           </div>
           {executorLoading ? <div className="form-info">Загружаем объявление...</div> : (
             <form className="form" onSubmit={publishExecutor}>
-              <div className="service-photo-editor">
-                <span className="service-photo-label">{executorCategory === "Трансфер" ? "Фото автомобиля" : "Фото услуги"}</span>
-                <div className="service-photo-preview">
-                  {servicePhotoPreview ? <img src={servicePhotoPreview} alt="Фотография объявления" /> : <span>Добавьте фотографию автомобиля или своей услуги</span>}
-                </div>
-                <label className="secondary media-picker">
-                  <span>{servicePhotoPreview ? "Заменить фотографию" : "Выбрать фотографию"}</span>
-                  <input type="file" accept={IMAGE_TYPES.join(",")} onChange={chooseServicePhoto} />
-                </label>
-                <small>Обязательное поле · JPG, PNG или WebP · до 8 МБ</small>
-              </div>
               {executorCategory === "Клининг" ? <label className="field"><span>Район работы</span><select value={executorDraft.serviceArea} onChange={(event) => changeExecutor("serviceArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label> : null}
               <label className="field"><span>Заголовок объявления</span><input value={executorDraft.headline} onChange={(event) => changeExecutor("headline", event.target.value)} placeholder="Например, трансфер из аэропорта и поездки по городу" /></label>
               <label className="field"><span>Описание услуг</span><textarea value={executorDraft.bio} onChange={(event) => changeExecutor("bio", event.target.value)} placeholder="Расскажите об автомобиле, маршрутах и условиях работы" /></label>

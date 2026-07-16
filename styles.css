@@ -2107,6 +2107,23 @@ button {
   align-items: stretch;
 }
 
+.profile-service-photo-editor {
+  width: 100%;
+  padding-top: 16px;
+  border-top: 1px solid #dfe9e4;
+}
+
+.service-photo-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.service-photo-heading small {
+  text-align: right;
+}
+
 .service-photo-label {
   color: #3f4542;
   font-weight: 800;
@@ -2126,6 +2143,14 @@ button {
   text-align: center;
 }
 
+.service-photo-preview.contain-mode {
+  background:
+    linear-gradient(45deg, rgba(8, 122, 119, 0.035) 25%, transparent 25%, transparent 75%, rgba(8, 122, 119, 0.035) 75%),
+    linear-gradient(45deg, rgba(8, 122, 119, 0.035) 25%, #f8fbfa 25%, #f8fbfa 75%, rgba(8, 122, 119, 0.035) 75%);
+  background-position: 0 0, 10px 10px;
+  background-size: 20px 20px;
+}
+
 .service-photo-preview span {
   max-width: 260px;
   padding: 22px;
@@ -2134,6 +2159,60 @@ button {
 
 .service-photo-editor small {
   color: var(--muted);
+}
+
+.service-photo-display-settings {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #dfe8e3;
+  border-radius: 8px;
+  background: #f7faf8;
+}
+
+.service-photo-display-settings > span,
+.service-photo-position > span {
+  color: #3f4542;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.service-photo-fit-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.service-photo-fit-buttons button {
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid #d8d2c4;
+  border-radius: 8px;
+  color: var(--brand-dark);
+  background: #fff;
+  font: inherit;
+  font-weight: 800;
+}
+
+.service-photo-fit-buttons button.active {
+  border-color: var(--brand);
+  color: #fff;
+  background: var(--brand);
+}
+
+.service-photo-position {
+  display: grid;
+  gap: 7px;
+}
+
+.service-photo-position select {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid #d8d2c4;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
 }
 
 .route-editor {
@@ -3246,8 +3325,21 @@ button {
     text-align: center;
   }
 
+  .service-photo-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .service-photo-heading small {
+    text-align: left;
+  }
+
   .service-photo-preview {
     min-height: 0;
+  }
+
+  .service-photo-fit-buttons {
+    grid-template-columns: 1fr;
   }
 
   .route-edit-row {
