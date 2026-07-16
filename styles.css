@@ -2102,15 +2102,21 @@ button {
 
 .service-photo-editor {
   display: grid;
-  grid-template-columns: minmax(220px, 0.8fr) minmax(180px, 0.45fr);
-  gap: 12px 16px;
-  align-items: center;
+  width: min(100%, 640px);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.service-photo-label {
+  color: #3f4542;
+  font-weight: 800;
 }
 
 .service-photo-preview {
-  grid-row: span 2;
   display: grid;
-  min-height: 230px;
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
   place-items: center;
   overflow: hidden;
   border: 1px dashed #8aaea6;
@@ -3216,8 +3222,7 @@ button {
     flex-direction: column;
   }
 
-  .profile-avatar-editor,
-  .service-photo-editor {
+  .profile-avatar-editor {
     grid-template-columns: 1fr;
   }
 
@@ -3233,8 +3238,7 @@ button {
   }
 
   .service-photo-preview {
-    grid-row: auto;
-    min-height: 190px;
+    min-height: 0;
   }
 
   .route-edit-row {

@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preload" href="assets/hurghada-hero.png" as="image" fetchpriority="high" />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260716-announcement-features" />
+    <link rel="stylesheet" href="styles.css?v=20260716-service-photo-layout" />
   </head>
   <body>
     <div id="app">
@@ -2467,6 +2467,7 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
           {executorLoading ? <div className="form-info">Загружаем объявление...</div> : (
             <form className="form" onSubmit={publishExecutor}>
               <div className="service-photo-editor">
+                <span className="service-photo-label">{executorDraft.category === "Трансфер" ? "Фото автомобиля" : "Фото услуги"}</span>
                 <div className="service-photo-preview">
                   {servicePhotoPreview ? <img src={servicePhotoPreview} alt="Фотография объявления" /> : <span>Добавьте фотографию автомобиля или своей услуги</span>}
                 </div>

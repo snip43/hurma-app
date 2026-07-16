@@ -2420,6 +2420,7 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
           {executorLoading ? <div className="form-info">Загружаем объявление...</div> : (
             <form className="form" onSubmit={publishExecutor}>
               <div className="service-photo-editor">
+                <span className="service-photo-label">{executorDraft.category === "Трансфер" ? "Фото автомобиля" : "Фото услуги"}</span>
                 <div className="service-photo-preview">
                   {servicePhotoPreview ? <img src={servicePhotoPreview} alt="Фотография объявления" /> : <span>Добавьте фотографию автомобиля или своей услуги</span>}
                 </div>
