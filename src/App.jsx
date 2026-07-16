@@ -422,8 +422,16 @@ function Header({ user, onHome, onProfile, onLogout }) {
         ) : null}
         {user ? (
           <>
-            <button className="role-pill role-pill-button" type="button" onClick={onProfile} disabled={user.isGuest}>
-              {user.role === "executor" ? "Исполнитель" : user.isGuest ? "Гость" : "Клиент"} · {user.name}
+            <button
+              className="role-pill role-pill-button"
+              type="button"
+              onClick={onProfile}
+              disabled={user.isGuest}
+              aria-label={`${user.role === "executor" ? "Исполнитель" : user.isGuest ? "Гость" : "Клиент"}: ${user.name}`}
+            >
+              <span className="role-pill-label">{user.role === "executor" ? "Исполнитель" : user.isGuest ? "Гость" : "Клиент"}</span>
+              <span className="role-pill-separator" aria-hidden="true">·</span>
+              <span className="role-pill-name">{user.name}</span>
             </button>
             <button className="secondary" type="button" onClick={onLogout}>
               Выйти

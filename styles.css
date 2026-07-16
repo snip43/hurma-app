@@ -422,8 +422,16 @@ button {
 }
 
 .role-pill-button {
+  gap: 5px;
   cursor: pointer;
   font-family: inherit;
+}
+
+.role-pill-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .role-pill-button:hover:not(:disabled),
@@ -3112,11 +3120,16 @@ button {
 
   .role-pill {
     min-width: 0;
-    max-width: min(40vw, 180px);
+    max-width: min(42vw, 180px);
     min-height: 34px;
     padding: 5px 9px;
     justify-content: center;
     font-size: 12px;
+  }
+
+  .role-pill-label,
+  .role-pill-separator {
+    display: none;
   }
 
   .user-tools .secondary {

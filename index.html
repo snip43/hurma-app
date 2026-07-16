@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preload" href="assets/hurghada-hero.png" as="image" fetchpriority="high" />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260715-login-actions" />
+    <link rel="stylesheet" href="styles.css?v=20260716-mobile-user-name" />
   </head>
   <body>
     <div id="app">
@@ -471,8 +471,16 @@ function Header({ user, onHome, onProfile, onLogout }) {
         ) : null}
         {user ? (
           <>
-            <button className="role-pill role-pill-button" type="button" onClick={onProfile} disabled={user.isGuest}>
-              {user.role === "executor" ? "Исполнитель" : user.isGuest ? "Гость" : "Клиент"} · {user.name}
+            <button
+              className="role-pill role-pill-button"
+              type="button"
+              onClick={onProfile}
+              disabled={user.isGuest}
+              aria-label={`${user.role === "executor" ? "Исполнитель" : user.isGuest ? "Гость" : "Клиент"}: ${user.name}`}
+            >
+              <span className="role-pill-label">{user.role === "executor" ? "Исполнитель" : user.isGuest ? "Гость" : "Клиент"}</span>
+              <span className="role-pill-separator" aria-hidden="true">·</span>
+              <span className="role-pill-name">{user.name}</span>
             </button>
             <button className="secondary" type="button" onClick={onLogout}>
               Выйти
