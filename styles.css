@@ -2405,6 +2405,14 @@ button {
   font-weight: 800;
 }
 
+.route-price-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
 .route-point-selects,
 .route-price-controls {
   display: grid;
@@ -2435,10 +2443,12 @@ button {
 }
 
 .route-conversion {
-  min-height: 18px;
+  margin-left: auto;
   color: var(--muted);
   font-size: 12px;
+  font-weight: 500;
   line-height: 1.45;
+  white-space: nowrap;
 }
 
 .route-currency-status {
