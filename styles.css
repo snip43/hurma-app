@@ -2124,9 +2124,10 @@ button {
 }
 
 .profile-service-photo-editor {
-  width: 100%;
+  width: min(100%, 820px);
   padding-top: 16px;
   border-top: 1px solid #dfe9e4;
+  justify-self: center;
 }
 
 .service-photo-heading {
@@ -2159,12 +2160,11 @@ button {
   text-align: center;
 }
 
-.service-photo-preview.contain-mode {
-  background:
-    linear-gradient(45deg, rgba(8, 122, 119, 0.035) 25%, transparent 25%, transparent 75%, rgba(8, 122, 119, 0.035) 75%),
-    linear-gradient(45deg, rgba(8, 122, 119, 0.035) 25%, #f8fbfa 25%, #f8fbfa 75%, rgba(8, 122, 119, 0.035) 75%);
-  background-position: 0 0, 10px 10px;
-  background-size: 20px 20px;
+.service-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
 }
 
 .service-photo-preview span {
@@ -2177,58 +2177,121 @@ button {
   color: var(--muted);
 }
 
-.service-photo-display-settings {
+.photo-crop-backdrop {
+  z-index: 90;
+}
+
+.photo-crop-dialog {
   display: grid;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid #dfe8e3;
+  width: min(760px, 100%);
+  max-height: calc(100dvh - 32px);
+  gap: 16px;
+  overflow: auto;
+  padding: clamp(16px, 3vw, 24px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 8px;
-  background: #f7faf8;
+  background: #fff;
+  box-shadow: 0 30px 90px rgba(6, 43, 53, 0.28);
 }
 
-.service-photo-display-settings > span,
-.service-photo-position > span {
-  color: #3f4542;
-  font-size: 13px;
-  font-weight: 800;
+.photo-crop-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
 }
 
-.service-photo-fit-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+.photo-crop-heading h2,
+.photo-crop-heading p {
+  margin: 0;
 }
 
-.service-photo-fit-buttons button {
-  min-height: 44px;
-  padding: 9px 12px;
+.photo-crop-heading h2 {
+  margin-bottom: 6px;
+  font-size: clamp(24px, 4vw, 32px);
+}
+
+.photo-crop-heading p {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.photo-crop-close {
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  padding: 0;
   border: 1px solid #d8d2c4;
-  border-radius: 8px;
+  border-radius: 50%;
   color: var(--brand-dark);
   background: #fff;
   font: inherit;
-  font-weight: 800;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.service-photo-fit-buttons button.active {
-  border-color: var(--brand);
-  color: #fff;
-  background: var(--brand);
-}
-
-.service-photo-position {
-  display: grid;
-  gap: 7px;
-}
-
-.service-photo-position select {
+.photo-crop-frame {
+  position: relative;
   width: 100%;
-  min-height: 46px;
-  padding: 10px 12px;
-  border: 1px solid #d8d2c4;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 2px solid var(--brand);
   border-radius: 8px;
-  background: #fff;
-  font: inherit;
+  background: #183f45;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.photo-crop-frame.dragging {
+  cursor: grabbing;
+}
+
+.photo-crop-frame img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform;
+}
+
+.photo-crop-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to right, transparent 33.2%, rgba(255, 255, 255, 0.48) 33.2%, rgba(255, 255, 255, 0.48) 33.5%, transparent 33.5%, transparent 66.5%, rgba(255, 255, 255, 0.48) 66.5%, rgba(255, 255, 255, 0.48) 66.8%, transparent 66.8%),
+    linear-gradient(to bottom, transparent 33.2%, rgba(255, 255, 255, 0.48) 33.2%, rgba(255, 255, 255, 0.48) 33.5%, transparent 33.5%, transparent 66.5%, rgba(255, 255, 255, 0.48) 66.5%, rgba(255, 255, 255, 0.48) 66.8%, transparent 66.8%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+
+.photo-crop-zoom {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 10px;
+  color: var(--brand-dark);
+  font-size: 26px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.photo-crop-zoom input {
+  width: 100%;
+  accent-color: var(--brand);
+}
+
+.photo-crop-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.photo-crop-actions button {
+  min-height: 52px;
 }
 
 .route-editor {
@@ -3400,7 +3463,15 @@ button {
     min-height: 0;
   }
 
-  .service-photo-fit-buttons {
+  .photo-crop-backdrop {
+    padding: 10px;
+  }
+
+  .photo-crop-dialog {
+    max-height: calc(100dvh - 20px);
+  }
+
+  .photo-crop-actions {
     grid-template-columns: 1fr;
   }
 
