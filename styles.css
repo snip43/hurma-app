@@ -2165,11 +2165,20 @@ button {
   align-items: end;
 }
 
+.executor-options-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.executor-option-field,
 .executor-features-field {
   display: grid;
   gap: 10px;
 }
 
+.executor-option-field > small,
 .executor-features-field > small {
   color: var(--muted);
 }
@@ -3335,6 +3344,10 @@ button {
   }
 
   .custom-feature-row {
+    grid-template-columns: 1fr;
+  }
+
+  .executor-options-grid {
     grid-template-columns: 1fr;
   }
 

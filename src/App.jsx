@@ -33,6 +33,15 @@ const CHAT_DIALOG_CACHE_PREFIX = "hurma-chat-dialogs-v1:";
 const PROFILE_AVATAR_BUCKET = "profile-avatars";
 const SERVICE_IMAGE_BUCKET = "service-images";
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const EXECUTOR_LANGUAGES = [
+  "Русский",
+  "Английский",
+  "Арабский",
+  "Немецкий",
+  "Французский",
+  "Итальянский",
+  "Украинский",
+];
 const EXECUTOR_FEATURES = {
   Трансфер: [
     "Встреча в аэропорту",
@@ -2143,11 +2152,17 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
   const [executorError, setExecutorError] = useState("");
   const [publishingExecutor, setPublishingExecutor] = useState(false);
   const [servicePhotoFile, setServicePhotoFile] = useState(null);
+  const [languageChoice, setLanguageChoice] = useState("");
+  const [customLanguage, setCustomLanguage] = useState("");
   const [featureChoice, setFeatureChoice] = useState("");
   const [customFeature, setCustomFeature] = useState("");
   const areas = areaOptions(draft.city);
   const avatarPreview = useMemo(() => avatarFile ? URL.createObjectURL(avatarFile) : (draft.avatarUrl || ""), [avatarFile, draft.avatarUrl]);
   const servicePhotoPreview = useMemo(() => servicePhotoFile ? URL.createObjectURL(servicePhotoFile) : executorDraft.photoUrl, [servicePhotoFile, executorDraft.photoUrl]);
+  const selectedLanguages = useMemo(
+    () => executorDraft.languages.split(",").map((item) => item.trim()).filter(Boolean),
+    [executorDraft.languages]
+  );
   const selectedFeatures = useMemo(
     () => executorDraft.tags.split(",").map((item) => item.trim()).filter(Boolean),
     [executorDraft.tags]
@@ -2274,6 +2289,27 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
 
   function removeFeature(value) {
     changeExecutor("tags", selectedFeatures.filter((item) => item !== value).join(", "));
+  }
+
+  function addLanguage(value) {
+    const normalized = value.trim();
+    if (!normalized) return;
+    const nextLanguages = selectedLanguages.some((item) => item.toLowerCase() === normalized.toLowerCase())
+      ? selectedLanguages
+      : [...selectedLanguages, normalized];
+    changeExecutor("languages", nextLanguages.join(", "));
+    setLanguageChoice("");
+    setCustomLanguage("");
+  }
+
+  function chooseLanguage(event) {
+    const value = event.target.value;
+    setLanguageChoice(value);
+    if (value && value !== "Другое") addLanguage(value);
+  }
+
+  function removeLanguage(value) {
+    changeExecutor("languages", selectedLanguages.filter((item) => item !== value).join(", "));
   }
 
   function chooseServicePhoto(event) {
@@ -2439,43 +2475,76 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
                   <button className="secondary route-add" type="button" onClick={addRoute}>Добавить маршрут</button>
                 </fieldset>
               ) : null}
-              <div className="two-col">
-                {executorCategory === "Клининг" ? <label className="field"><span>Цена от, $</span><input type="number" min="0" step="1" value={executorDraft.priceFrom} onChange={(event) => changeExecutor("priceFrom", event.target.value)} placeholder="20" /></label> : null}
-                <label className="field"><span>Языки через запятую</span><input value={executorDraft.languages} onChange={(event) => changeExecutor("languages", event.target.value)} placeholder="Русский, Английский, Арабский" /></label>
-              </div>
-              <div className="field executor-features-field">
-                <span>Особенности</span>
-                <select value={featureChoice} onChange={chooseFeature}>
-                  <option value="">Выберите особенность</option>
-                  {availableFeatures.filter((feature) => !selectedFeatures.includes(feature)).map((feature) => <option key={feature} value={feature}>{feature}</option>)}
-                  <option value="Другое">Другое</option>
-                </select>
-                {featureChoice === "Другое" ? (
-                  <div className="custom-feature-row">
-                    <input
-                      value={customFeature}
-                      onChange={(event) => setCustomFeature(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          addFeature(customFeature);
-                        }
-                      }}
-                      placeholder="Напишите свой вариант"
-                    />
-                    <button className="secondary" type="button" onClick={() => addFeature(customFeature)} disabled={!customFeature.trim()}>Добавить</button>
-                  </div>
-                ) : null}
-                {selectedFeatures.length ? (
-                  <div className="selected-features" aria-label="Выбранные особенности">
-                    {selectedFeatures.map((feature) => (
-                      <span className="selected-feature" key={feature}>
-                        {feature}
-                        <button type="button" onClick={() => removeFeature(feature)} aria-label={`Удалить ${feature}`}>×</button>
-                      </span>
-                    ))}
-                  </div>
-                ) : <small>Можно выбрать несколько пунктов по очереди.</small>}
+              {executorCategory === "Клининг" ? <label className="field"><span>Цена от, $</span><input type="number" min="0" step="1" value={executorDraft.priceFrom} onChange={(event) => changeExecutor("priceFrom", event.target.value)} placeholder="20" /></label> : null}
+              <div className="executor-options-grid">
+                <div className="field executor-option-field">
+                  <span>Языки</span>
+                  <select value={languageChoice} onChange={chooseLanguage}>
+                    <option value="">Выберите язык</option>
+                    {EXECUTOR_LANGUAGES.filter((language) => !selectedLanguages.includes(language)).map((language) => <option key={language} value={language}>{language}</option>)}
+                    <option value="Другое">Другое</option>
+                  </select>
+                  {languageChoice === "Другое" ? (
+                    <div className="custom-feature-row">
+                      <input
+                        value={customLanguage}
+                        onChange={(event) => setCustomLanguage(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            addLanguage(customLanguage);
+                          }
+                        }}
+                        placeholder="Напишите язык"
+                      />
+                      <button className="secondary" type="button" onClick={() => addLanguage(customLanguage)} disabled={!customLanguage.trim()}>Добавить</button>
+                    </div>
+                  ) : null}
+                  {selectedLanguages.length ? (
+                    <div className="selected-features" aria-label="Выбранные языки">
+                      {selectedLanguages.map((language) => (
+                        <span className="selected-feature" key={language}>
+                          {language}
+                          <button type="button" onClick={() => removeLanguage(language)} aria-label={`Удалить ${language}`}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : <small>Можно выбрать несколько языков.</small>}
+                </div>
+                <div className="field executor-option-field">
+                  <span>Особенности</span>
+                  <select value={featureChoice} onChange={chooseFeature}>
+                    <option value="">Выберите особенность</option>
+                    {availableFeatures.filter((feature) => !selectedFeatures.includes(feature)).map((feature) => <option key={feature} value={feature}>{feature}</option>)}
+                    <option value="Другое">Другое</option>
+                  </select>
+                  {featureChoice === "Другое" ? (
+                    <div className="custom-feature-row">
+                      <input
+                        value={customFeature}
+                        onChange={(event) => setCustomFeature(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            addFeature(customFeature);
+                          }
+                        }}
+                        placeholder="Напишите свой вариант"
+                      />
+                      <button className="secondary" type="button" onClick={() => addFeature(customFeature)} disabled={!customFeature.trim()}>Добавить</button>
+                    </div>
+                  ) : null}
+                  {selectedFeatures.length ? (
+                    <div className="selected-features" aria-label="Выбранные особенности">
+                      {selectedFeatures.map((feature) => (
+                        <span className="selected-feature" key={feature}>
+                          {feature}
+                          <button type="button" onClick={() => removeFeature(feature)} aria-label={`Удалить ${feature}`}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : <small>Можно выбрать несколько пунктов.</small>}
+                </div>
               </div>
               {executorError ? <div className="error">{executorError}</div> : null}
               {executorMessage ? <div className="form-info">{executorMessage}</div> : null}
