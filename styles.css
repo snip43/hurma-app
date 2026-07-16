@@ -2042,6 +2042,27 @@ button {
   background: #f5f9f7;
 }
 
+.executor-profile-overview {
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.profile-avatar-column {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+
+.profile-avatar-column .media-picker {
+  width: 100%;
+}
+
+.executor-profile-identity {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
 .profile-avatar-preview {
   display: grid;
   width: 96px;
@@ -3446,6 +3467,10 @@ button {
   }
 
   .profile-avatar-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .executor-profile-overview {
     grid-template-columns: 1fr;
   }
 

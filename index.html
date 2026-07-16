@@ -656,7 +656,7 @@ function Header({ user, onHome, onProfile, onLogout }) {
         </div>
       </button>
       <div className="user-tools">
-        {user && !user.isGuest && user.searchArea ? (
+        {user && !user.isGuest && user.role !== "executor" && user.searchArea ? (
           <span className="location-pill location-pill-static">
             <span>Район поиска</span>
             <strong>{user.searchArea}</strong>
@@ -2982,16 +2982,38 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
         <h2 className="section-title">{user.role === "executor" ? "Профиль исполнителя" : "Профиль клиента"}</h2>
         <p className="section-note">Эти данные можно изменить при необходимости.</p>
         <form className="form" onSubmit={save}>
-          <div className="profile-avatar-editor">
-            <div className="profile-avatar-preview">
-              {avatarPreview ? <img src={avatarPreview} alt="Аватар профиля" /> : <span>{draft.name?.slice(0, 1) || "Х"}</span>}
+          {user.role === "executor" ? (
+            <div className="profile-avatar-editor executor-profile-overview">
+              <div className="profile-avatar-column">
+                <div className="profile-avatar-preview">
+                  {avatarPreview ? <img src={avatarPreview} alt="Аватар профиля" /> : <span>{draft.name?.slice(0, 1) || "Х"}</span>}
+                </div>
+                <label className="secondary media-picker">
+                  <span>{avatarPreview ? "Изменить фотографию" : "Добавить фотографию"}</span>
+                  <input type="file" accept={IMAGE_TYPES.join(",")} onChange={chooseAvatar} />
+                </label>
+              </div>
+              <div className="executor-profile-identity">
+                <div className="two-col">
+                  <label className="field"><span>Имя и фамилия</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
+                  <label className="field"><span>Город</span><select value={draft.city} onChange={(event) => change("city", event.target.value)}>{Object.keys(CITIES).map((city) => <option key={city}>{city}</option>)}</select></label>
+                </div>
+                <label className="field profile-email-field"><span>Email аккаунта</span><input value={draft.email || "Email не указан"} readOnly /></label>
+                <p>Фотография будет видна собеседникам в чатах.</p>
+              </div>
             </div>
-            <label className="secondary media-picker">
-              <span>{avatarPreview ? "Изменить фотографию" : "Добавить фотографию"}</span>
-              <input type="file" accept={IMAGE_TYPES.join(",")} onChange={chooseAvatar} />
-            </label>
-            <p>Фотография будет видна собеседникам в чатах.</p>
-          </div>
+          ) : (
+            <div className="profile-avatar-editor">
+              <div className="profile-avatar-preview">
+                {avatarPreview ? <img src={avatarPreview} alt="Аватар профиля" /> : <span>{draft.name?.slice(0, 1) || "Х"}</span>}
+              </div>
+              <label className="secondary media-picker">
+                <span>{avatarPreview ? "Изменить фотографию" : "Добавить фотографию"}</span>
+                <input type="file" accept={IMAGE_TYPES.join(",")} onChange={chooseAvatar} />
+              </label>
+              <p>Фотография будет видна собеседникам в чатах.</p>
+            </div>
+          )}
           {user.role === "executor" ? (
             <div className="service-photo-editor profile-service-photo-editor">
               <div className="service-photo-heading">
@@ -3023,12 +3045,16 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
               ) : null}
             </div>
           ) : null}
-          <div className="two-col">
-            <label className="field"><span>Имя и фамилия</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
-            <label className="field"><span>Город</span><select value={draft.city} onChange={(event) => change("city", event.target.value)}>{Object.keys(CITIES).map((city) => <option key={city}>{city}</option>)}</select></label>
-          </div>
-          <label className="field profile-email-field"><span>Email аккаунта</span><input value={draft.email || "Email не указан"} readOnly /></label>
-          <label className="field"><span>Район поиска</span><select value={draft.searchArea} onChange={(event) => change("searchArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
+          {user.role !== "executor" ? (
+            <>
+              <div className="two-col">
+                <label className="field"><span>Имя и фамилия</span><input value={draft.name} onChange={(event) => change("name", event.target.value)} /></label>
+                <label className="field"><span>Город</span><select value={draft.city} onChange={(event) => change("city", event.target.value)}>{Object.keys(CITIES).map((city) => <option key={city}>{city}</option>)}</select></label>
+              </div>
+              <label className="field profile-email-field"><span>Email аккаунта</span><input value={draft.email || "Email не указан"} readOnly /></label>
+              <label className="field"><span>Район поиска</span><select value={draft.searchArea} onChange={(event) => change("searchArea", event.target.value)}>{areas.map((area) => <option key={area}>{area}</option>)}</select></label>
+            </>
+          ) : null}
           {profileError ? <div className="error">{profileError}</div> : null}
           <button className="primary" type="submit" disabled={locked || savingProfile}>{savingProfile ? "Сохраняем..." : "Сохранить профиль"}</button>
           <button className="ghost profile-back-button" type="button" onClick={onBack}>Назад</button>
