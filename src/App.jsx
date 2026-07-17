@@ -112,6 +112,7 @@ const EXECUTORS = [
     title: "Трансфер из аэропорта и поездки по городу",
     price: "от 12 $",
     rating: 4.9,
+    reviewCount: 28,
     about: "Встречаю в аэропорту, помогаю с багажом, поездки по Хургаде, Эль-Гуне и Сахль-Хашиш.",
     skills: ["аэропорт", "детское кресло", "русский язык"],
     photoUrl: "assets/hurghada-hero.png",
@@ -129,6 +130,7 @@ const EXECUTORS = [
     title: "Семейные поездки и междугородний трансфер",
     price: "от 18 $",
     rating: 4.8,
+    reviewCount: 17,
     about: "Комфортный минивэн, поездки в Каир, Луксор, Эль-Гуну и аэропорт.",
     skills: ["минивэн", "семьи", "межгород"],
     photoUrl: "assets/hurghada-hero.png",
@@ -146,6 +148,7 @@ const EXECUTORS = [
     title: "Уборка квартир и апартаментов",
     price: "от 20 $",
     rating: 4.95,
+    reviewCount: 34,
     about: "Регулярная уборка, генеральная уборка после гостей, подготовка квартиры к заселению.",
     skills: ["апартаменты", "после гостей", "окна"],
   },
@@ -158,6 +161,7 @@ const EXECUTORS = [
     title: "Клининг вилл и больших квартир",
     price: "от 35 $",
     rating: 4.7,
+    reviewCount: 12,
     about: "Команда для больших объектов, уборка после ремонта, поддерживающая уборка.",
     skills: ["виллы", "после ремонта", "команда"],
   },
@@ -486,9 +490,11 @@ function mapDatabaseExecutor(executor) {
       : executor.price_from == null
         ? "Цена по договоренности"
         : `от ${formatMoney(executor.price_from, executor.currency || "USD")}`,
-    rating: Number(executor.rating || 0).toFixed(1),
+    rating: Number(executor.rating || 0),
+    reviewCount: Number(executor.review_count || 0),
     about: executor.bio,
     skills: [...(executor.tags || []), ...(executor.languages || [])],
+    avatarUrl: executor.avatar_url || "",
     photoUrl: executor.photo_url || "",
     routes,
   };
@@ -1277,7 +1283,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
           id: data,
           title: executor.name,
           subtitle: executor.title || "Личная переписка",
-          avatarUrl: executor.photoUrl || "",
+          avatarUrl: executor.avatarUrl || "",
           readonly: false,
           messages: [],
         },
@@ -1299,7 +1305,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
         {workspaceError ? <div className="panel error-state">{workspaceError}</div> : null}
         {view === "messages" ? <ChatMenu onServices={openServices} onChat={openChat} /> : null}
         {view === "services" && user.role === "executor" ? <ExecutorDashboard user={user} onChat={openChat} onAnnouncement={openAnnouncement} databaseExecutors={databaseExecutors} /> : null}
-        {view === "services" && user.role !== "executor" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} /> : null}
+        {view === "services" && user.role !== "executor" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} reloadExecutors={reloadExecutors} /> : null}
         {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} externalConversationFallbacks={chatFallbacks} /> : null}
         {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} onBack={closeProfile} mode={profileMode} /> : null}
       </section>
@@ -1307,7 +1313,7 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
   );
 }
 
-function Services({ user, service, setService, onOpenChat, onRequireSubscription, onStartChat, events, eventsLoading, eventsError, databaseExecutors }) {
+function Services({ user, service, setService, onOpenChat, onRequireSubscription, onStartChat, events, eventsLoading, eventsError, databaseExecutors, reloadExecutors }) {
   function showAllSections(event) {
     event.currentTarget.blur();
     setService("");
@@ -1340,17 +1346,84 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
           Все разделы
         </button>
       </div>
-      {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} sourceEvents={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : <ExecutorList service={service} user={user} onStartChat={onStartChat} databaseExecutors={databaseExecutors} />}
+      {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} sourceEvents={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : <ExecutorList service={service} user={user} onStartChat={onStartChat} databaseExecutors={databaseExecutors} reloadExecutors={reloadExecutors} />}
     </>
   );
 }
 
-function ExecutorList({ service, user, onStartChat, databaseExecutors }) {
+function ExecutorList({ service, user, onStartChat, databaseExecutors, reloadExecutors }) {
   const [q, setQ] = useState("");
   const [filterDraft, setFilterDraft] = useState({ q: "" });
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [myRatings, setMyRatings] = useState({});
+  const [ratingOpen, setRatingOpen] = useState("");
+  const [ratingSaving, setRatingSaving] = useState("");
+  const [ratingError, setRatingError] = useState("");
   const exchangeRateState = useExchangeRates();
   const items = [...databaseExecutors, ...EXECUTORS].filter((executor) => executor.category === service && `${executor.name} ${executor.title} ${executor.area}`.toLowerCase().includes(q.toLowerCase()));
+  const canRateExecutors = Boolean(supabaseClient && user && !user.isGuest && user.role === "client");
+  const ratingCountLabel = (count) => {
+    const lastTwo = count % 100;
+    const last = count % 10;
+    if (lastTwo >= 11 && lastTwo <= 14) return `${count} оценок`;
+    if (last === 1) return `${count} оценка`;
+    if (last >= 2 && last <= 4) return `${count} оценки`;
+    return `${count} оценок`;
+  };
+
+  useEffect(() => {
+    if (!canRateExecutors) {
+      setMyRatings({});
+      return undefined;
+    }
+    const executorIds = databaseExecutors
+      .filter((executor) => executor.category === service && executor.databaseUserId)
+      .map((executor) => executor.databaseUserId);
+    if (!executorIds.length) {
+      setMyRatings({});
+      return undefined;
+    }
+    let active = true;
+    supabaseClient
+      .from("executor_ratings")
+      .select("executor_id, score")
+      .eq("client_id", user.id)
+      .in("executor_id", executorIds)
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error) {
+          setRatingError("Не удалось загрузить ваши оценки. Обновите страницу и попробуйте ещё раз.");
+          return;
+        }
+        setMyRatings(Object.fromEntries((data || []).map((rating) => [rating.executor_id, Number(rating.score)])));
+      });
+    return () => {
+      active = false;
+    };
+  }, [canRateExecutors, databaseExecutors, service, user?.id]);
+
+  async function saveExecutorRating(executor, score) {
+    if (!canRateExecutors || !executor.databaseUserId || ratingSaving) return;
+    setRatingSaving(executor.databaseUserId);
+    setRatingError("");
+    const { error } = await supabaseClient.from("executor_ratings").upsert({
+      executor_id: executor.databaseUserId,
+      client_id: user.id,
+      score,
+    }, { onConflict: "executor_id,client_id" });
+    if (error) {
+      setRatingError("Не удалось сохранить оценку. Проверьте соединение и попробуйте ещё раз.");
+      setRatingSaving("");
+      return;
+    }
+    setMyRatings((ratings) => ({ ...ratings, [executor.databaseUserId]: score }));
+    setRatingOpen("");
+    try {
+      await reloadExecutors();
+    } finally {
+      setRatingSaving("");
+    }
+  }
   const openFilters = () => {
     setFilterDraft({ q });
     setFiltersOpen(true);
@@ -1385,45 +1458,86 @@ function ExecutorList({ service, user, onStartChat, databaseExecutors }) {
           </form>
         </div>
       ) : null}
+      {ratingError ? <div className="panel error-state executor-rating-error">{ratingError}</div> : null}
       <div className="cards-grid">
-        {items.map((executor) => (
-          <article className="executor-card" key={executor.id}>
-            <div className="executor-photo-wrap">
-              {executor.photoUrl ? <img className="executor-photo" src={parseServicePhoto(executor.photoUrl).src} style={servicePhotoStyle(executor.photoUrl)} alt={`Объявление ${executor.name}`} /> : <div className="executor-photo-placeholder">{executor.name.slice(0, 1)}</div>}
-              <span className="executor-rating">★ {executor.rating}</span>
-            </div>
-            <div className="executor-card-body">
-              <div className="executor-top">
-                <div>
-                  <h3>{executor.name}</h3>
-                  <span>{[executor.city, executor.area].filter(Boolean).join(" · ")}</span>
+        {items.map((executor) => {
+          const rating = Number(executor.rating || 0);
+          const reviewCount = Number(executor.reviewCount || 0);
+          const ownRating = executor.databaseUserId ? myRatings[executor.databaseUserId] : null;
+          const ratingEditorOpen = ratingOpen === executor.id;
+          return (
+            <article className="executor-card" key={executor.id}>
+              <div className="executor-card-body">
+                <div className="executor-top">
+                  <div className="executor-avatar" aria-hidden="true">
+                    {executor.avatarUrl ? <img src={executor.avatarUrl} alt="" /> : <span>{executor.name.slice(0, 1)}</span>}
+                  </div>
+                  <div className="executor-identity">
+                    <h3>{executor.name}</h3>
+                    <span>{[executor.city, executor.area].filter(Boolean).join(" · ")}</span>
+                  </div>
+                  <div className="executor-rating-summary" aria-label={reviewCount ? `Рейтинг ${rating.toFixed(1)} из 5, оценок: ${reviewCount}` : "Оценок пока нет"}>
+                    <strong><span aria-hidden="true">★</span> {reviewCount ? rating.toFixed(1) : "Новый"}</strong>
+                    <small>{reviewCount ? ratingCountLabel(reviewCount) : "нет оценок"}</small>
+                  </div>
                 </div>
-              </div>
-              <p className="executor-title"><strong>{executor.title}</strong></p>
-              <p>{executor.about}</p>
-              {executor.category === "Трансфер" && executor.routes?.length ? (
-                <div className="route-list" aria-label="Популярные маршруты">
-                  {executor.routes.slice(0, 4).map((route, index) => (
-                    <div className="route-row" key={`${route.from}-${route.to}-${index}`}>
-                      <span>{route.from} <b aria-hidden="true">→</b> {route.to}</span>
-                      <strong>
-                        <span>{formatMoney(route.price, route.currency || "USD")}</span>
-                        {exchangeRateState.rates ? <small>{conversionText(route.price, route.currency || "USD", exchangeRateState.rates)}</small> : null}
-                      </strong>
+                <p className="executor-title"><strong>{executor.title}</strong></p>
+                <p>{executor.about}</p>
+                {executor.category === "Трансфер" && executor.routes?.length ? (
+                  <section className="executor-routes" aria-label="Цены по маршрутам">
+                    <div className="executor-routes-heading">
+                      <strong>Цены по маршрутам</strong>
+                      <span>{executor.routes.length}</span>
                     </div>
-                  ))}
+                    <div className="route-list">
+                      {executor.routes.slice(0, 4).map((route, index) => (
+                        <div className="route-row" key={`${route.from}-${route.to}-${index}`}>
+                          <span>{route.from} <b aria-hidden="true">→</b> {route.to}</span>
+                          <strong>
+                            <span>{formatMoney(route.price, route.currency || "USD")}</span>
+                            {exchangeRateState.rates ? <small>{conversionText(route.price, route.currency || "USD", exchangeRateState.rates)}</small> : null}
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+                <div className="meta">{executor.skills.map((skill) => <span className="tag" key={skill}>{skill}</span>)}</div>
+                {canRateExecutors && executor.databaseUserId ? (
+                  <div className="executor-rating-control">
+                    <button className="rating-toggle" type="button" onClick={() => setRatingOpen((current) => current === executor.id ? "" : executor.id)}>
+                      <span aria-hidden="true">★</span>
+                      {ownRating ? `Ваша оценка: ${ownRating}` : "Оценить поездку"}
+                    </button>
+                    {ratingEditorOpen ? (
+                      <div className="rating-stars" role="group" aria-label={`Оценить поездку с ${executor.name}`}>
+                        {[1, 2, 3, 4, 5].map((score) => (
+                          <button
+                            className={score <= (ownRating || 0) ? "selected" : ""}
+                            type="button"
+                            key={score}
+                            disabled={ratingSaving === executor.databaseUserId}
+                            onClick={() => saveExecutorRating(executor, score)}
+                            aria-label={`${score} из 5`}
+                            title={`${score} из 5`}
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="executor-footer">
+                  {executor.category !== "Трансфер" || !executor.routes?.length ? <span className="price">{executor.price}</span> : null}
+                  <button className="primary" type="button" onClick={() => onStartChat(executor)}>
+                    Написать
+                  </button>
                 </div>
-              ) : null}
-              <div className="meta">{executor.skills.map((skill) => <span className="tag" key={skill}>{skill}</span>)}</div>
-              <div className="executor-footer">
-                <span className="price">{executor.price}</span>
-                <button className="primary" type="button" onClick={() => onStartChat(executor)}>
-                  Написать
-                </button>
               </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
       {service === "Трансфер" ? (
         <p className="currency-attribution">
@@ -2714,10 +2828,13 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
           },
         });
         if (authError) throw authError;
-        if (nextServicePhotoUrl) {
+        if (nextServicePhotoUrl || nextAvatarUrl) {
           const { error: executorProfileError } = await supabaseClient
             .from("executor_profiles")
-            .update({ photo_url: nextServicePhotoUrl })
+            .update({
+              photo_url: nextServicePhotoUrl || null,
+              avatar_url: nextAvatarUrl || null,
+            })
             .eq("user_id", user.id);
           if (executorProfileError) throw executorProfileError;
         }
@@ -2904,6 +3021,7 @@ function Profile({ user, setUser, reloadExecutors, onBack, mode = "profile" }) {
         currency: routes[0]?.currency || "USD",
         languages: splitList(executorDraft.languages),
         tags: splitList(executorDraft.tags),
+        avatar_url: draft.avatarUrl || null,
         photo_url: nextPhotoUrl,
         routes,
         is_published: true,
@@ -3247,7 +3365,7 @@ function App() {
     if (!supabaseClient) return;
     const { data, error } = await supabaseClient
       .from("executor_profiles")
-      .select("user_id, display_name, category, headline, bio, city, service_area, price_from, currency, languages, tags, rating, photo_url, routes")
+      .select("user_id, display_name, category, headline, bio, city, service_area, price_from, currency, languages, tags, rating, review_count, avatar_url, photo_url, routes")
       .eq("is_published", true)
       .order("created_at", { ascending: false });
     if (!error) setDatabaseExecutors(data.map(mapDatabaseExecutor));
