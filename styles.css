@@ -2050,6 +2050,18 @@ button {
   width: 100%;
 }
 
+.executor-footer-actions {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.executor-footer-actions button {
+  flex: 1;
+  min-width: 0;
+}
+
 .executor-rating-control {
   display: grid;
   gap: 8px;
@@ -3566,6 +3578,11 @@ button {
   .publish-heading,
   .chat-head {
     align-items: stretch;
+    flex-direction: column;
+  }
+
+  .executor-footer-actions {
+    width: 100%;
     flex-direction: column;
   }
 
