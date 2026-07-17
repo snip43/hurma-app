@@ -1208,13 +1208,9 @@ function ExecutorDashboard({ user, onChat, onAnnouncement, databaseExecutors }) 
 function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading, eventsError, databaseExecutors, reloadExecutors }) {
   const [view, setView] = useState("services");
   const [service, setService] = useState("");
-  const savedWorkspace = loadSaved();
-  const savedChatByUser = savedWorkspace.chatByUser || {};
   const [chatId, setChatId] = useState("");
-  const [chatFallbacks, setChatFallbacks] = useState({});
   const [profileReturnView, setProfileReturnView] = useState("services");
   const [profileMode, setProfileMode] = useState("profile");
-  const [workspaceError, setWorkspaceError] = useState("");
 
   function goHome() {
     setView("services");
@@ -1263,57 +1259,23 @@ function Workspace({ user, setUser, onRequireSubscription, events, eventsLoading
     window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }));
   }, [view, service]);
 
-  async function startExecutorChat(executor) {
-    setWorkspaceError("");
-    if (!isSubscribed(user)) {
-      onRequireSubscription();
-      return;
-    }
-    if (executor.databaseUserId && supabaseClient) {
-      const { data, error } = await supabaseClient.rpc("create_direct_conversation", {
-        other_user_id: executor.databaseUserId,
-      });
-      if (error) {
-        setWorkspaceError(error.message);
-        return;
-      }
-      setChatFallbacks((items) => ({
-        ...items,
-        [data]: {
-          id: data,
-          title: executor.name,
-          subtitle: executor.title || "Личная переписка",
-          avatarUrl: executor.avatarUrl || "",
-          readonly: false,
-          messages: [],
-        },
-      }));
-      setChatId(`conversation:${data}`);
-      setView("messages");
-      return;
-    }
-    setChatId(`executor:${executor.id}`);
-    setView("messages");
-  }
-
   window.hurmaGoHome = goHome;
   window.hurmaOpenProfile = openProfile;
 
   return (
     <section className={`workspace ${view === "messages" ? "workspace-chat-focus" : ""}`}>
       <section className="content">
-        {workspaceError ? <div className="panel error-state">{workspaceError}</div> : null}
         {view === "messages" ? <ChatMenu onServices={openServices} onChat={openChat} /> : null}
         {view === "services" && user.role === "executor" ? <ExecutorDashboard user={user} onChat={openChat} onAnnouncement={openAnnouncement} databaseExecutors={databaseExecutors} /> : null}
-        {view === "services" && user.role !== "executor" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} onStartChat={startExecutorChat} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} reloadExecutors={reloadExecutors} /> : null}
-        {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} externalConversationFallbacks={chatFallbacks} /> : null}
+        {view === "services" && user.role !== "executor" ? <Services user={user} service={service} setService={setService} onOpenChat={openChat} onRequireSubscription={onRequireSubscription} events={events} eventsLoading={eventsLoading} eventsError={eventsError} databaseExecutors={databaseExecutors} reloadExecutors={reloadExecutors} /> : null}
+        {view === "messages" ? <Messages chatId={chatId} setChatId={setChatId} user={user} onServices={openServices} onChat={openChat} onProfile={openProfile} /> : null}
         {view === "profile" && !user.isGuest ? <Profile user={user} setUser={setUser} reloadExecutors={reloadExecutors} onBack={closeProfile} mode={profileMode} /> : null}
       </section>
     </section>
   );
 }
 
-function Services({ user, service, setService, onOpenChat, onRequireSubscription, onStartChat, events, eventsLoading, eventsError, databaseExecutors, reloadExecutors }) {
+function Services({ user, service, setService, onOpenChat, onRequireSubscription, events, eventsLoading, eventsError, databaseExecutors, reloadExecutors }) {
   function showAllSections(event) {
     event.currentTarget.blur();
     setService("");
@@ -1346,12 +1308,12 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
           Все разделы
         </button>
       </div>
-      {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} sourceEvents={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : <ExecutorList service={service} user={user} onRequireSubscription={onRequireSubscription} onStartChat={onStartChat} databaseExecutors={databaseExecutors} reloadExecutors={reloadExecutors} />}
+      {service === "Афиша" ? <Afisha user={user} onRequireSubscription={onRequireSubscription} sourceEvents={events} eventsLoading={eventsLoading} eventsError={eventsError} /> : <ExecutorList service={service} user={user} onRequireSubscription={onRequireSubscription} databaseExecutors={databaseExecutors} reloadExecutors={reloadExecutors} />}
     </>
   );
 }
 
-function ExecutorList({ service, user, onRequireSubscription, onStartChat, databaseExecutors, reloadExecutors }) {
+function ExecutorList({ service, user, onRequireSubscription, databaseExecutors, reloadExecutors }) {
   const [q, setQ] = useState("");
   const [filterDraft, setFilterDraft] = useState({ q: "" });
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -1360,6 +1322,8 @@ function ExecutorList({ service, user, onRequireSubscription, onStartChat, datab
   const [ratingOpen, setRatingOpen] = useState("");
   const [ratingSaving, setRatingSaving] = useState("");
   const [requestSaving, setRequestSaving] = useState("");
+  const [requestDialog, setRequestDialog] = useState(null);
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
   const [ratingError, setRatingError] = useState("");
   const exchangeRateState = useExchangeRates();
   const items = [...databaseExecutors, ...EXECUTORS].filter((executor) => executor.category === service && `${executor.name} ${executor.title} ${executor.area}`.toLowerCase().includes(q.toLowerCase()));
@@ -1441,12 +1405,37 @@ function ExecutorList({ service, user, onRequireSubscription, onStartChat, datab
     }
   }
 
-  async function createExecutorRequest(executor) {
-    if (!executor.databaseUserId || requestSaving) return;
+  function openRequestDialog(executor) {
+    if (!executor.routes?.length) {
+      setRatingError("Исполнитель пока не добавил поездки для заявки.");
+      return;
+    }
+    setRatingError("");
+    setSelectedRouteIndex(0);
+    setRequestDialog(executor);
+  }
+
+  async function createExecutorRequest(event) {
+    event.preventDefault();
+    const executor = requestDialog;
+    if (!executor || requestSaving) return;
     if (!isSubscribed(user)) {
+      setRequestDialog(null);
       onRequireSubscription();
       return;
     }
+    if (!executor.databaseUserId) {
+      setRequestDialog(null);
+      setRatingError("Это демонстрационное объявление. Для заявки выберите зарегистрированного исполнителя.");
+      return;
+    }
+    const selectedRoute = executor.routes?.[selectedRouteIndex];
+    if (!selectedRoute) {
+      setRatingError("Выберите поездку из списка.");
+      return;
+    }
+    const routePrice = formatMoney(selectedRoute.price, selectedRoute.currency || "USD");
+    const requestComment = `Поездка: ${selectedRoute.from} → ${selectedRoute.to}. Цена: ${routePrice}.`;
     setRequestSaving(executor.databaseUserId);
     setRatingError("");
     const { data, error } = await supabaseClient
@@ -1454,7 +1443,7 @@ function ExecutorList({ service, user, onRequireSubscription, onStartChat, datab
       .insert({
         client_id: user.id,
         executor_id: executor.databaseUserId,
-        comment: "",
+        comment: requestComment,
         status: "new",
       })
       .select("id, executor_id, status, created_at, updated_at")
@@ -1468,6 +1457,7 @@ function ExecutorList({ service, user, onRequireSubscription, onStartChat, datab
     }
     setClientRequests((requests) => [data, ...requests]);
     setRequestSaving("");
+    setRequestDialog(null);
   }
   const openFilters = () => {
     setFilterDraft({ q });
@@ -1503,6 +1493,43 @@ function ExecutorList({ service, user, onRequireSubscription, onStartChat, datab
           </form>
         </div>
       ) : null}
+      {requestDialog ? (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`Выбор поездки у ${requestDialog.name}`}>
+          <form className="filter-modal request-modal" onSubmit={createExecutorRequest}>
+            <div className="filter-modal-head">
+              <div>
+                <h2>Выберите поездку</h2>
+                <p>{requestDialog.name}</p>
+              </div>
+              <button className="ghost" type="button" onClick={() => setRequestDialog(null)} aria-label="Закрыть">×</button>
+            </div>
+            <div className="request-route-list" role="radiogroup" aria-label="Доступные поездки">
+              {requestDialog.routes.map((route, index) => (
+                <label className={`request-route-option ${selectedRouteIndex === index ? "selected" : ""}`} key={`${route.from}-${route.to}-${index}`}>
+                  <input
+                    type="radio"
+                    name="executor-route"
+                    value={index}
+                    checked={selectedRouteIndex === index}
+                    onChange={() => setSelectedRouteIndex(index)}
+                  />
+                  <span>
+                    <strong>{route.from} <b aria-hidden="true">→</b> {route.to}</strong>
+                    {exchangeRateState.rates ? <small>{conversionText(route.price, route.currency || "USD", exchangeRateState.rates)}</small> : null}
+                  </span>
+                  <strong>{formatMoney(route.price, route.currency || "USD")}</strong>
+                </label>
+              ))}
+            </div>
+            <div className="filter-modal-actions">
+              <button className="secondary" type="button" onClick={() => setRequestDialog(null)}>Отмена</button>
+              <button className="primary" type="submit" disabled={Boolean(requestSaving)}>
+                {requestSaving ? "Отправляем..." : "Подтвердить заявку"}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
       {ratingError ? <div className="panel error-state executor-rating-error">{ratingError}</div> : null}
       <div className="cards-grid">
         {items.map((executor) => {
@@ -1520,7 +1547,6 @@ function ExecutorList({ service, user, onRequireSubscription, onStartChat, datab
           const requestStatusLabel = activeRequest?.status === "accepted"
             ? (service === "Трансфер" ? "Поездка подтверждена" : "Заявка принята")
             : "Заявка отправлена";
-          const requestButtonLabel = service === "Трансфер" ? "Заказать поездку" : "Оставить заявку";
           const ratingButtonLabel = service === "Трансфер" ? "Оценить поездку" : "Оценить услугу";
           return (
             <article className="executor-card" key={executor.id}>
@@ -1588,21 +1614,18 @@ function ExecutorList({ service, user, onRequireSubscription, onStartChat, datab
                 <div className="executor-footer">
                   {executor.category !== "Трансфер" || !executor.routes?.length ? <span className="price">{executor.price}</span> : null}
                   <div className="executor-footer-actions">
-                    {showRequestAction && executor.databaseUserId ? (
+                    {showRequestAction ? (
                       <button
-                        className="secondary"
+                        className="primary"
                         type="button"
                         disabled={Boolean(activeRequest) || requestSaving === executor.databaseUserId}
-                        onClick={() => createExecutorRequest(executor)}
+                        onClick={() => openRequestDialog(executor)}
                       >
                         {activeRequest
                           ? requestStatusLabel
-                          : requestSaving === executor.databaseUserId ? "Отправляем..." : requestButtonLabel}
+                          : requestSaving === executor.databaseUserId ? "Отправляем..." : "Оставить заявку"}
                       </button>
                     ) : null}
-                    <button className="primary" type="button" onClick={() => onStartChat(executor)}>
-                      Написать
-                    </button>
                   </div>
                 </div>
               </div>

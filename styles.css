@@ -1528,6 +1528,74 @@ button {
   gap: 10px;
 }
 
+.request-modal {
+  width: min(640px, 100%);
+}
+
+.request-modal .filter-modal-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.request-modal .filter-modal-head p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.request-route-list {
+  display: grid;
+  gap: 8px;
+}
+
+.request-route-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 70px;
+  padding: 12px 14px;
+  border: 1px solid #d9e4df;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+}
+
+.request-route-option:hover,
+.request-route-option.selected {
+  border-color: var(--brand);
+  background: #edf7f3;
+}
+
+.request-route-option input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--brand);
+}
+
+.request-route-option > span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.request-route-option > span strong {
+  overflow-wrap: anywhere;
+}
+
+.request-route-option b {
+  color: var(--brand);
+}
+
+.request-route-option small {
+  color: var(--muted);
+}
+
+.request-route-option > strong {
+  color: var(--brand-dark);
+  white-space: nowrap;
+}
+
 .service-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2060,6 +2128,10 @@ button {
 .executor-footer-actions button {
   flex: 1;
   min-width: 0;
+}
+
+.executor-footer-actions > :only-child {
+  width: 100%;
 }
 
 .executor-rating-control {
@@ -3850,6 +3922,15 @@ button {
 
   .filter-modal-actions {
     grid-template-columns: 1fr;
+  }
+
+  .request-route-option {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .request-route-option > strong {
+    grid-column: 2;
+    justify-self: start;
   }
 
   .contact-actions {

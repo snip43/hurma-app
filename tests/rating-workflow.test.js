@@ -23,8 +23,12 @@ test("rating controls require a completed request in the interface", () => {
   assert.match(appSource, /request_id: request\.id/);
 });
 
-test("client can create a trip request before rating", () => {
-  assert.match(appSource, /async function createExecutorRequest\(executor\)/);
-  assert.match(appSource, /"Заказать поездку"/);
+test("client selects an executor route before creating a request", () => {
+  assert.match(appSource, /function openRequestDialog\(executor\)/);
+  assert.match(appSource, /async function createExecutorRequest\(event\)/);
+  assert.match(appSource, /requestDialog\.routes\.map/);
+  assert.match(appSource, /Поездка: \$\{selectedRoute\.from\} → \$\{selectedRoute\.to\}/);
+  assert.match(appSource, /"Оставить заявку"/);
+  assert.doesNotMatch(appSource, /onStartChat\(executor\)/);
   assert.match(appSource, /status: "new"/);
 });
