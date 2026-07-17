@@ -27,7 +27,12 @@ test("client selects an executor route before creating a request", () => {
   assert.match(appSource, /function openRequestDialog\(executor\)/);
   assert.match(appSource, /async function createExecutorRequest\(event\)/);
   assert.match(appSource, /requestDialog\.routes\.map/);
-  assert.match(appSource, /Поездка: \$\{selectedRoute\.from\} → \$\{selectedRoute\.to\}/);
+  assert.match(appSource, /Поездка: \$\{requestDetails\.from\.trim\(\)\} → \$\{requestDetails\.to\.trim\(\)\}/);
+  assert.match(appSource, /type="datetime-local"/);
+  assert.match(appSource, /Дата и время: \$\{travelDate\}/);
+  assert.match(appSource, /Предложение клиента: \$\{clientPrice\}/);
+  assert.match(appSource, /Комментарий: \$\{requestDetails\.comment\.trim\(\)\}/);
+  assert.match(appSource, /Своя цена <small>\(необязательно\)<\/small>/);
   assert.match(appSource, /"Оставить заявку"/);
   assert.doesNotMatch(appSource, /onStartChat\(executor\)/);
   assert.match(appSource, /status: "new"/);

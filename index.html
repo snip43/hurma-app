@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preload" href="assets/hurghada-hero.png" as="image" fetchpriority="high" />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260717-request-route-picker" />
+    <link rel="stylesheet" href="styles.css?v=20260718-request-details" />
   </head>
   <body>
     <div id="app">
@@ -342,6 +342,11 @@ function saveChatDialogCache(userId, dialogs) {
 
 function areaOptions(city) {
   return CITIES[city] || CITIES["Хургада"];
+}
+
+function localDateTimeValue(date = new Date()) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
+  return localDate.toISOString().slice(0, 16);
 }
 
 function imageFileError(file, maxMegabytes) {
@@ -1375,6 +1380,15 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
   const [requestSaving, setRequestSaving] = useState("");
   const [requestDialog, setRequestDialog] = useState(null);
   const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+  const [requestFormError, setRequestFormError] = useState("");
+  const [requestDetails, setRequestDetails] = useState({
+    travelAt: "",
+    from: "",
+    to: "",
+    comment: "",
+    proposedPrice: "",
+    currency: "USD",
+  });
   const [ratingError, setRatingError] = useState("");
   const exchangeRateState = useExchangeRates();
   const items = [...databaseExecutors, ...EXECUTORS].filter((executor) => executor.category === service && `${executor.name} ${executor.title} ${executor.area}`.toLowerCase().includes(q.toLowerCase()));
@@ -1462,8 +1476,35 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
       return;
     }
     setRatingError("");
+    setRequestFormError("");
     setSelectedRouteIndex(0);
+    const firstRoute = executor.routes[0];
+    setRequestDetails({
+      travelAt: "",
+      from: firstRoute.from,
+      to: firstRoute.to,
+      comment: "",
+      proposedPrice: "",
+      currency: normalizeCurrency(firstRoute.currency || "USD"),
+    });
     setRequestDialog(executor);
+  }
+
+  function selectRequestRoute(route, index) {
+    setRequestFormError("");
+    setSelectedRouteIndex(index);
+    setRequestDetails((details) => ({
+      ...details,
+      from: route.from,
+      to: route.to,
+      proposedPrice: "",
+      currency: normalizeCurrency(route.currency || "USD"),
+    }));
+  }
+
+  function changeRequestDetail(key, value) {
+    setRequestFormError("");
+    setRequestDetails((details) => ({ ...details, [key]: value }));
   }
 
   async function createExecutorRequest(event) {
@@ -1482,13 +1523,40 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
     }
     const selectedRoute = executor.routes?.[selectedRouteIndex];
     if (!selectedRoute) {
-      setRatingError("Выберите поездку из списка.");
+      setRequestFormError("Выберите поездку из списка.");
+      return;
+    }
+    if (!requestDetails.travelAt || !requestDetails.from.trim() || !requestDetails.to.trim()) {
+      setRequestFormError("Укажите дату, время, место отправления и пункт назначения.");
+      return;
+    }
+    const travelTimestamp = new Date(requestDetails.travelAt).getTime();
+    if (!Number.isFinite(travelTimestamp) || travelTimestamp < Date.now()) {
+      setRequestFormError("Выберите будущую дату и время поездки.");
+      return;
+    }
+    const proposedPrice = requestDetails.proposedPrice.trim()
+      ? Number(requestDetails.proposedPrice)
+      : null;
+    if (proposedPrice !== null && (!Number.isFinite(proposedPrice) || proposedPrice <= 0)) {
+      setRequestFormError("Предлагаемая стоимость должна быть больше нуля.");
       return;
     }
     const routePrice = formatMoney(selectedRoute.price, selectedRoute.currency || "USD");
-    const requestComment = `Поездка: ${selectedRoute.from} → ${selectedRoute.to}. Цена: ${routePrice}.`;
+    const travelDate = new Date(requestDetails.travelAt).toLocaleString("ru-RU", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+    const clientPrice = proposedPrice === null ? "" : formatMoney(proposedPrice, requestDetails.currency);
+    const requestComment = [
+      `Поездка: ${requestDetails.from.trim()} → ${requestDetails.to.trim()}`,
+      `Дата и время: ${travelDate}`,
+      `Цена исполнителя: ${routePrice}`,
+      clientPrice ? `Предложение клиента: ${clientPrice}` : "",
+      requestDetails.comment.trim() ? `Комментарий: ${requestDetails.comment.trim()}` : "",
+    ].filter(Boolean).join("\n");
     setRequestSaving(executor.databaseUserId);
-    setRatingError("");
+    setRequestFormError("");
     const { data, error } = await supabaseClient
       .from("requests")
       .insert({
@@ -1500,7 +1568,7 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
       .select("id, executor_id, status, created_at, updated_at")
       .single();
     if (error) {
-      setRatingError(error.code === "23505"
+      setRequestFormError(error.code === "23505"
         ? "Активная заявка этому исполнителю уже отправлена."
         : "Не удалось отправить заявку. Проверьте соединение и попробуйте ещё раз.");
       setRequestSaving("");
@@ -1508,6 +1576,7 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
     }
     setClientRequests((requests) => [data, ...requests]);
     setRequestSaving("");
+    setRequestFormError("");
     setRequestDialog(null);
   }
   const openFilters = () => {
@@ -1552,7 +1621,10 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
                 <h2>Выберите поездку</h2>
                 <p>{requestDialog.name}</p>
               </div>
-              <button className="ghost" type="button" onClick={() => setRequestDialog(null)} aria-label="Закрыть">×</button>
+              <button className="ghost" type="button" onClick={() => {
+                setRequestFormError("");
+                setRequestDialog(null);
+              }} aria-label="Закрыть">×</button>
             </div>
             <div className="request-route-list" role="radiogroup" aria-label="Доступные поездки">
               {requestDialog.routes.map((route, index) => (
@@ -1562,7 +1634,7 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
                     name="executor-route"
                     value={index}
                     checked={selectedRouteIndex === index}
-                    onChange={() => setSelectedRouteIndex(index)}
+                    onChange={() => selectRequestRoute(route, index)}
                   />
                   <span>
                     <strong>{route.from} <b aria-hidden="true">→</b> {route.to}</strong>
@@ -1572,8 +1644,71 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
                 </label>
               ))}
             </div>
+            <div className="request-details">
+              <label className="field request-date-field">
+                <span>Дата и время поездки</span>
+                <input
+                  type="datetime-local"
+                  min={localDateTimeValue()}
+                  value={requestDetails.travelAt}
+                  onChange={(event) => changeRequestDetail("travelAt", event.target.value)}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Откуда</span>
+                <input
+                  value={requestDetails.from}
+                  onChange={(event) => changeRequestDetail("from", event.target.value)}
+                  placeholder="Адрес или место отправления"
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Куда</span>
+                <input
+                  value={requestDetails.to}
+                  onChange={(event) => changeRequestDetail("to", event.target.value)}
+                  placeholder="Адрес или пункт назначения"
+                  required
+                />
+              </label>
+              <div className="request-price-field">
+                <label className="field">
+                  <span>Своя цена <small>(необязательно)</small></span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={requestDetails.proposedPrice}
+                    onChange={(event) => changeRequestDetail("proposedPrice", event.target.value)}
+                    placeholder="Например, 12"
+                  />
+                </label>
+                <label className="field request-currency-field">
+                  <span>Валюта</span>
+                  <select value={requestDetails.currency} onChange={(event) => changeRequestDetail("currency", event.target.value)}>
+                    {CURRENCIES.map((currency) => <option key={currency.code} value={currency.code}>{currency.label}</option>)}
+                  </select>
+                </label>
+              </div>
+              <label className="field request-comment-field">
+                <span>Комментарий исполнителю</span>
+                <textarea
+                  value={requestDetails.comment}
+                  onChange={(event) => changeRequestDetail("comment", event.target.value)}
+                  placeholder="Например, номер рейса, количество пассажиров или детское кресло"
+                  rows="3"
+                />
+              </label>
+            </div>
+            {requestFormError ? <div className="error-state request-form-error">{requestFormError}</div> : null}
             <div className="filter-modal-actions">
-              <button className="secondary" type="button" onClick={() => setRequestDialog(null)}>Отмена</button>
+              <button className="secondary" type="button" onClick={() => {
+                setRequestFormError("");
+                setRequestDialog(null);
+              }}>Отмена</button>
               <button className="primary" type="submit" disabled={Boolean(requestSaving)}>
                 {requestSaving ? "Отправляем..." : "Подтвердить заявку"}
               </button>
