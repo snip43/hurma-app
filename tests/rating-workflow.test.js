@@ -18,7 +18,10 @@ test("rating is linked to a completed request", () => {
 });
 
 test("rating controls require a completed request in the interface", () => {
-  assert.match(appSource, /const completedRequests = executorRequests\.filter\(\(request\) => request\.status === "completed"\)/);
+  assert.match(appSource, /request\.status === "completed"/);
+  assert.match(appSource, /request\.comment\?\.includes\("Поездка:"\)/);
+  assert.match(appSource, /request\.comment\?\.includes\("Дата и время:"\)/);
+  assert.match(appSource, /request\.comment\?\.includes\("Цена исполнителя:"\)/);
   assert.match(appSource, /canRateExecutors && executor\.databaseUserId && ratingRequest/);
   assert.match(appSource, /request_id: request\.id/);
 });

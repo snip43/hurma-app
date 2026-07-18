@@ -1370,7 +1370,7 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
     Promise.all([
       supabaseClient
         .from("requests")
-        .select("id, executor_id, status, created_at, updated_at")
+        .select("id, executor_id, status, comment, created_at, updated_at")
         .eq("client_id", user.id)
         .in("executor_id", executorIds)
         .order("updated_at", { ascending: false }),
@@ -1514,7 +1514,7 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
         comment: requestComment,
         status: "new",
       })
-      .select("id, executor_id, status, created_at, updated_at")
+      .select("id, executor_id, status, comment, created_at, updated_at")
       .single();
     if (error) {
       setRequestFormError(error.code === "23505"
@@ -1674,7 +1674,12 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
             ? clientRequests.filter((request) => request.executor_id === executor.databaseUserId)
             : [];
           const activeRequest = executorRequests.find((request) => ["new", "accepted"].includes(request.status));
-          const completedRequests = executorRequests.filter((request) => request.status === "completed");
+          const completedRequests = executorRequests.filter((request) => (
+            request.status === "completed"
+            && request.comment?.includes("Поездка:")
+            && request.comment?.includes("Дата и время:")
+            && request.comment?.includes("Цена исполнителя:")
+          ));
           const ratingRequest = completedRequests.find((request) => !myRatings[request.id])
             || completedRequests.find((request) => myRatings[request.id]);
           const ownRating = ratingRequest ? myRatings[ratingRequest.id] : null;
