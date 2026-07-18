@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preload" href="assets/hurghada-hero.png" as="image" fetchpriority="high" />
     <link href="https://fonts.googleapis.com/css2?family=Anton&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260718-rating-after-trip" />
+    <link rel="stylesheet" href="styles.css?v=20260718-executor-filters" />
   </head>
   <body>
     <div id="app">
@@ -150,6 +150,30 @@ const EXECUTOR_FEATURES = {
     "Свои средства",
     "Срочный выезд",
     "Уборка апартаментов",
+  ],
+};
+
+const EXECUTOR_FILTER_OPTIONS = {
+  Трансфер: [
+    { id: "children", label: "С детьми", terms: ["с детьми", "семьи", "семейные"] },
+    { id: "child-seat", label: "Детское кресло", terms: ["детское кресло"] },
+    { id: "russian-speaking", label: "Русскоговорящий", terms: ["русскоязычный", "русский язык", "русский"] },
+    { id: "airport", label: "Встреча в аэропорту", terms: ["встреча в аэропорту", "аэропорт"] },
+    { id: "minivan", label: "Минивэн", terms: ["минивэн"] },
+    { id: "air-conditioning", label: "Кондиционер", terms: ["кондиционер"] },
+    { id: "large-trunk", label: "Большой багажник", terms: ["большой багажник"] },
+    { id: "intercity", label: "Межгород", terms: ["межгород", "междугородние"] },
+    { id: "around-clock", label: "Круглосуточно", terms: ["круглосуточно"] },
+  ],
+  Клининг: [
+    { id: "general-cleaning", label: "Генеральная уборка", terms: ["генеральная уборка"] },
+    { id: "regular-cleaning", label: "Поддерживающая уборка", terms: ["поддерживающая уборка"] },
+    { id: "after-guests", label: "После гостей", terms: ["после гостей", "уборка после гостей"] },
+    { id: "after-renovation", label: "После ремонта", terms: ["после ремонта", "уборка после ремонта"] },
+    { id: "windows", label: "Мытьё окон", terms: ["мытье окон", "окна"] },
+    { id: "own-supplies", label: "Свои средства", terms: ["свои средства"] },
+    { id: "urgent", label: "Срочный выезд", terms: ["срочный выезд"] },
+    { id: "apartments", label: "Уборка апартаментов", terms: ["уборка апартаментов", "апартаменты"] },
   ],
 };
 
@@ -554,6 +578,22 @@ function mapDatabaseExecutor(executor) {
     photoUrl: executor.photo_url || "",
     routes,
   };
+}
+
+function normalizeExecutorFilterText(value) {
+  return String(value || "").toLocaleLowerCase("ru-RU").replaceAll("ё", "е");
+}
+
+function executorMatchesFilter(executor, option) {
+  const searchable = normalizeExecutorFilterText([
+    executor.name,
+    executor.title,
+    executor.about,
+    executor.city,
+    executor.area,
+    ...(executor.skills || []),
+  ].join(" "));
+  return option.terms.some((term) => searchable.includes(normalizeExecutorFilterText(term)));
 }
 
 async function loadSupabaseUser(authUser) {
@@ -1371,7 +1411,8 @@ function Services({ user, service, setService, onOpenChat, onRequireSubscription
 
 function ExecutorList({ service, user, onRequireSubscription, databaseExecutors, reloadExecutors }) {
   const [q, setQ] = useState("");
-  const [filterDraft, setFilterDraft] = useState({ q: "" });
+  const [selectedFeatures, setSelectedFeatures] = useState([]);
+  const [filterDraft, setFilterDraft] = useState({ q: "", features: [] });
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [clientRequests, setClientRequests] = useState([]);
   const [myRatings, setMyRatings] = useState({});
@@ -1391,7 +1432,18 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
   });
   const [ratingError, setRatingError] = useState("");
   const exchangeRateState = useExchangeRates();
-  const items = [...databaseExecutors, ...EXECUTORS].filter((executor) => executor.category === service && `${executor.name} ${executor.title} ${executor.area}`.toLowerCase().includes(q.toLowerCase()));
+  const filterOptions = EXECUTOR_FILTER_OPTIONS[service] || [];
+  const items = [...databaseExecutors, ...EXECUTORS].filter((executor) => {
+    if (executor.category !== service) return false;
+    const textMatches = normalizeExecutorFilterText(`${executor.name} ${executor.title} ${executor.area}`)
+      .includes(normalizeExecutorFilterText(q));
+    const featuresMatch = selectedFeatures.every((featureId) => {
+      const option = filterOptions.find((item) => item.id === featureId);
+      return option ? executorMatchesFilter(executor, option) : true;
+    });
+    return textMatches && featuresMatch;
+  });
+  const activeFilterCount = (q.trim() ? 1 : 0) + selectedFeatures.length;
   const canRateExecutors = Boolean(supabaseClient && user && !user.isGuest && user.role === "client");
   const showRequestAction = Boolean(user && user.role === "client");
   const ratingCountLabel = (count) => {
@@ -1580,19 +1632,28 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
     setRequestDialog(null);
   }
   const openFilters = () => {
-    setFilterDraft({ q });
+    setFilterDraft({ q, features: [...selectedFeatures] });
     setFiltersOpen(true);
   };
   const saveFilters = (event) => {
     event.preventDefault();
     setQ(filterDraft.q);
+    setSelectedFeatures(filterDraft.features);
     setFiltersOpen(false);
+  };
+  const toggleFeatureFilter = (featureId) => {
+    setFilterDraft((draft) => ({
+      ...draft,
+      features: draft.features.includes(featureId)
+        ? draft.features.filter((item) => item !== featureId)
+        : [...draft.features, featureId],
+    }));
   };
   return (
     <>
       <div className="panel filter-summary">
         <button className="primary filter-open-button" type="button" onClick={openFilters}>
-          Фильтры{q.trim() ? " · 1" : ""}
+          Фильтры{activeFilterCount ? ` · ${activeFilterCount}` : ""}
         </button>
         <span>{items.length} исполнителей</span>
       </div>
@@ -1604,10 +1665,40 @@ function ExecutorList({ service, user, onRequireSubscription, databaseExecutors,
               <button className="ghost" type="button" onClick={() => setFiltersOpen(false)}>×</button>
             </div>
             <div className="event-filters event-filters-dynamic">
-              <input value={filterDraft.q} onChange={(event) => setFilterDraft({ q: event.target.value })} placeholder="Поиск исполнителя" />
+              <input
+                value={filterDraft.q}
+                onChange={(event) => setFilterDraft((draft) => ({ ...draft, q: event.target.value }))}
+                placeholder="Поиск исполнителя"
+              />
             </div>
+            <details className="executor-filter-dropdown">
+              <summary>
+                <span>{service === "Трансфер" ? "Параметры поездки" : "Параметры уборки"}</span>
+                <strong>{filterDraft.features.length ? `Выбрано: ${filterDraft.features.length}` : "Все параметры"}</strong>
+              </summary>
+              <div className="executor-filter-options">
+                {filterOptions.map((option) => (
+                  <label className={filterDraft.features.includes(option.id) ? "selected" : ""} key={option.id}>
+                    <input
+                      type="checkbox"
+                      checked={filterDraft.features.includes(option.id)}
+                      onChange={() => toggleFeatureFilter(option.id)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </details>
+            {filterDraft.features.length ? (
+              <div className="executor-filter-selected" aria-label="Выбранные параметры">
+                {filterDraft.features.map((featureId) => {
+                  const option = filterOptions.find((item) => item.id === featureId);
+                  return option ? <span key={featureId}>{option.label}</span> : null;
+                })}
+              </div>
+            ) : null}
             <div className="filter-modal-actions">
-              <button className="secondary" type="button" onClick={() => setFilterDraft({ q: "" })}>Сброс</button>
+              <button className="secondary" type="button" onClick={() => setFilterDraft({ q: "", features: [] })}>Сброс</button>
               <button className="primary" type="submit">Сохранить</button>
             </div>
           </form>

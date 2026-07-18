@@ -1523,6 +1523,100 @@ button {
   padding: 0;
 }
 
+.executor-filter-dropdown {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.executor-filter-dropdown summary {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px;
+  color: var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.executor-filter-dropdown summary::-webkit-details-marker {
+  display: none;
+}
+
+.executor-filter-dropdown summary::after {
+  content: "⌄";
+  flex: 0 0 auto;
+  color: var(--brand-dark);
+  font-size: 22px;
+  line-height: 1;
+  transition: transform 180ms ease;
+}
+
+.executor-filter-dropdown[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.executor-filter-dropdown summary > span {
+  font-weight: 800;
+}
+
+.executor-filter-dropdown summary > strong {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.executor-filter-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 4px 12px 14px;
+  border-top: 1px solid #e4ebe7;
+}
+
+.executor-filter-options label {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #3f4945;
+  background: #f3f6f2;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.executor-filter-options label.selected {
+  color: var(--brand-dark);
+  background: #dff0e9;
+}
+
+.executor-filter-options input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  accent-color: var(--brand);
+}
+
+.executor-filter-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.executor-filter-selected span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: var(--brand-dark);
+  background: #e4efea;
+  font-size: 13px;
+  font-weight: 850;
+}
+
 .filter-modal-actions {
   display: grid;
   grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
@@ -3965,6 +4059,27 @@ button {
 
   .filter-modal-actions {
     grid-template-columns: 1fr;
+  }
+
+  .executor-filter-options {
+    grid-template-columns: 1fr;
+  }
+
+  .executor-filter-dropdown summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+    padding-block: 10px;
+  }
+
+  .executor-filter-dropdown summary > strong {
+    margin-left: 0;
+  }
+
+  .executor-filter-dropdown summary::after {
+    position: absolute;
+    top: 14px;
+    right: 14px;
   }
 
   .request-route-option {
