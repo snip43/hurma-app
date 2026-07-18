@@ -42,7 +42,7 @@
     <script src="src/supabase-config.js"></script>
     <script src="src/auth-utils.js?v=20260715-email-confirmation"></script>
     <script src="src/async-utils.js?v=20260713-staged-attachments"></script>
-    <script src="src/chat-utils.js?v=20260715-profile-avatars"></script>
+    <script src="src/chat-utils.js?v=20260718-request-chat-access"></script>
     <script src="src/route-data.js?v=20260716-route-currency"></script>
     <script src="src/currency-utils.js?v=20260716-route-currency"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -689,6 +689,9 @@ function toUserError(error) {
   }
   if (/cannot send message/i.test(message)) {
     return "Вы не можете отправить сообщение в этот чат. Попробуйте открыть переписку заново.";
+  }
+  if (/executor chat requires an accepted request/i.test(message)) {
+    return "Переписка с исполнителем станет доступна после того, как он примет вашу заявку.";
   }
   if (/failed to fetch|network|timeout|timed out/i.test(message)) {
     return "Не удалось связаться с сервером. Проверьте интернет и попробуйте ещё раз.";
@@ -2309,16 +2312,52 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
 
   async function loadContacts() {
     if (!canUseDatabaseChat) return;
-    const { data, error } = await supabaseClient
-      .from("profiles")
-      .select("id, display_name, role, city, search_area, avatar_url")
-      .neq("id", user.id)
-      .order("display_name");
-    if (error) {
-      setChatError(error.message);
+    const isClient = user.role === "client";
+    const isExecutor = user.role === "executor";
+    const requestQuery = isClient
+      ? supabaseClient
+        .from("requests")
+        .select("executor_id, status")
+        .eq("client_id", user.id)
+        .in("status", ["accepted", "completed"])
+      : isExecutor
+        ? supabaseClient
+          .from("requests")
+          .select("client_id, status")
+          .eq("executor_id", user.id)
+          .in("status", ["accepted", "completed"])
+        : Promise.resolve({ data: [], error: null });
+    const [profilesResult, requestsResult] = await Promise.all([
+      supabaseClient
+        .from("profiles")
+        .select("id, display_name, role, city, search_area, avatar_url")
+        .neq("id", user.id)
+        .order("display_name"),
+      requestQuery,
+    ]);
+    if (profilesResult.error || requestsResult.error) {
+      setChatError(toUserError(profilesResult.error || requestsResult.error));
       return;
     }
-    setContacts(data.map(normalizeContact));
+    const eligibleOppositeRoleIds = new Set((requestsResult.data || []).map((request) => (
+      isClient ? request.executor_id : request.client_id
+    )).filter(Boolean));
+    const visibleProfiles = (profilesResult.data || []).filter((profile) => {
+      if (isClient && profile.role === "executor") {
+        return eligibleOppositeRoleIds.has(profile.id);
+      }
+      if (isExecutor && profile.role === "client") {
+        return eligibleOppositeRoleIds.has(profile.id);
+      }
+      return true;
+    });
+    setContacts(visibleProfiles.map(normalizeContact));
+  }
+
+  async function openContactPicker() {
+    setContactSearch("");
+    setContactPicker(true);
+    await loadContacts();
   }
 
   async function markConversationRead(conversationId) {
@@ -2679,7 +2718,11 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
                 <button type="button" onClick={() => setContactPicker(false)}>×</button>
               </div>
               <input value={contactSearch} onChange={(event) => setContactSearch(event.target.value)} placeholder="Поиск контакта" />
-              <div className="wa-notice">Для переписки выберите зарегистрированного пользователя из списка ниже. Телефонный контакт можно только сохранить как приглашение.</div>
+              <div className="wa-notice">
+                {user.role === "client"
+                  ? "Исполнитель появится здесь после того, как примет вашу заявку. С другими клиентами можно начать обычную переписку."
+                  : "Клиент появится здесь после того, как вы примете его заявку. С другими исполнителями можно начать обычную переписку."}
+              </div>
               <div className="quick-actions contact-actions">
                 <button className="secondary" type="button" onClick={() => setManualForm(true)}>Сохранить телефонный контакт</button>
                 <button className="secondary" type="button" onClick={importPhoneContact}>Из контактов телефона</button>
@@ -2701,11 +2744,12 @@ function Messages({ chatId, setChatId, user, onServices, onChat, onProfile, exte
                     </div>
                   </button>
                 ))}
+                {!visibleContacts.length ? <div className="wa-notice">Подходящих контактов пока нет.</div> : null}
               </div>
               </div>
             </div>
           ) : null}
-          {!user.isGuest && !contactPicker ? <button className="wa-floating-add" type="button" onClick={() => setContactPicker(true)} aria-label="Добавить собеседника"></button> : null}
+          {!user.isGuest && !contactPicker ? <button className="wa-floating-add" type="button" onClick={openContactPicker} aria-label="Добавить собеседника"></button> : null}
         </div>
       </div>
     );

@@ -21,6 +21,7 @@ test("normalizeContact maps a database profile to a contact card", () => {
     id: "user-1",
     title: "Мария",
     subtitle: "Клиент · Хургада · Marina",
+    role: "client",
     avatarUrl: "",
     source: "database",
     canMessage: true,
@@ -38,6 +39,7 @@ test("normalizeContact keeps the profile avatar for chat lists", () => {
   });
 
   assert.equal(contact.avatarUrl, "https://example.test/avatar.webp");
+  assert.equal(contact.role, "executor");
 });
 
 test("normalizeChatMessage maps a database message for the current user", () => {
